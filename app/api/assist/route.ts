@@ -5,7 +5,10 @@ export async function POST(req: Request) {
     try {
         // 1. Get the API Key safely from the environment
         const apiKey = process.env.GEMINI_API_KEY
+        console.log("AI Route: Received request. API Key exists?", !!apiKey)
+
         if (!apiKey) {
+            console.error("AI Route Error: GEMINI_API_KEY is missing")
             return NextResponse.json(
                 { error: 'Missing GEMINI_API_KEY in server environment' },
                 { status: 500 }
@@ -14,11 +17,12 @@ export async function POST(req: Request) {
 
         // 2. Initialize the Gemini Model
         const genAI = new GoogleGenerativeAI(apiKey)
-        const model = genAI.getGenerativeModel({ model: 'gemini-pro' })
+        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' }) // Switched to flash (faster/newer)
 
         // 3. Parse the user's request
         const body = await req.json()
         const { intent, taskInput } = body
+        console.log("AI Route: Processing intent:", intent)
 
         let prompt = ''
 
@@ -40,9 +44,11 @@ export async function POST(req: Request) {
         }
 
         // 5. Ask Gemini
+        console.log("AI Route: Sending prompt to Gemini...")
         const result = await model.generateContent(prompt)
         const response = await result.response
         const text = response.text()
+        console.log("AI Route: Received response from Gemini")
 
         // 6. Clean and parse the JSON result from AI
         // Sometimes AI adds markdown code blocks (```json), so we clean it.
@@ -52,7 +58,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ success: true, data })
 
     } catch (error: any) {
-        console.error('AI Error:', error)
+        console.error('AI Route Critical Failure:', error)
         return NextResponse.json(
             { error: 'Failed to process AI request', details: error.message },
             { status: 500 }
