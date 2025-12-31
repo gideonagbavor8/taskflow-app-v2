@@ -68,19 +68,35 @@ export const authOptions: NextAuthConfig = {
                   name: user.name || null,
                   image: user.image || null,
                   emailVerified: new Date(),
+                  lastLogin: new Date(),
                 },
               })
-            } else if (!existingUser.image && user.image) {
-              // Update image if missing
+            } else {
+              // Update image if missing and always update lastLogin
               await prisma.user.update({
                 where: { email: user.email },
-                data: { image: user.image },
+                data: {
+                  image: user.image || existingUser.image,
+                  lastLogin: new Date(),
+                },
               })
             }
           }
         } catch (error) {
           console.error('GOOGLE AUTH ERROR:', error)
           return false
+        }
+      } else if (account?.provider === 'credentials') {
+        // Update lastLogin for credentials users
+        if (user.email) {
+          try {
+            await prisma.user.update({
+              where: { email: user.email },
+              data: { lastLogin: new Date() },
+            })
+          } catch (error) {
+            console.error('CREDENTIALS LOGIN TRACKING ERROR:', error)
+          }
         }
       }
       return true
