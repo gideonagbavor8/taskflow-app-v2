@@ -249,20 +249,6 @@ export default function TaskDashboard() {
     }
   }
 
-  const toggleEmailNotifications = async () => {
-    try {
-      const newValue = !preferences?.emailNotifications
-      await fetch("/api/user/preferences", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ emailNotifications: newValue }),
-      })
-      mutatePrefs()
-    } catch (error) {
-      console.error("Error updating preferences:", error)
-    }
-  }
-
   const handleAIEnhance = async () => {
     if (!newTask.title.trim()) return
 
