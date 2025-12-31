@@ -16,9 +16,10 @@ model User {
   name          String?
   password      String?  // Hashed password for credentials auth
   emailVerified DateTime?
-  image         String?
-  lastLogin     DateTime @default(now())
-  createdAt     DateTime @default(now())
+  image              String?
+  lastLogin          DateTime @default(now())
+  emailNotifications Boolean  @default(true)
+  createdAt          DateTime @default(now())
   updatedAt     DateTime @updatedAt
   tasks         Task[]
 }

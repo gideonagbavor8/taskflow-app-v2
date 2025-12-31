@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
-import { CheckSquare, LayoutDashboard, FolderKanban, Settings, Plus, Menu, X, Moon, Sun, Trash2, Edit2, Sparkles, Wand2, Bell, AlertCircle, AlertTriangle } from "lucide-react"
+import { CheckSquare, LayoutDashboard, FolderKanban, Settings, Plus, Menu, X, Moon, Sun, Trash2, Edit2, Sparkles, Wand2, Bell, AlertCircle, AlertTriangle, Mail } from "lucide-react"
 import { signOut, useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { useEffect } from "react"
@@ -46,6 +46,7 @@ export default function TaskDashboard() {
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default")
 
   const { data: tasks = [], error, isLoading, mutate } = useSWR<Task[]>("/api/tasks", fetcher)
+  const { data: preferences, mutate: mutatePrefs } = useSWR("/api/user/preferences", fetcher)
 
   // Request Notification Permission on mount
   useEffect(() => {
@@ -58,6 +59,20 @@ export default function TaskDashboard() {
     if (typeof window !== "undefined" && "Notification" in window) {
       const permission = await Notification.requestPermission()
       setNotificationPermission(permission)
+    }
+  }
+
+  const toggleEmailNotifications = async () => {
+    try {
+      const newValue = !preferences?.emailNotifications
+      await fetch("/api/user/preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emailNotifications: newValue }),
+      })
+      mutatePrefs()
+    } catch (error) {
+      console.error("Error updating preferences:", error)
     }
   }
 
@@ -231,6 +246,20 @@ export default function TaskDashboard() {
       mutate()
     } catch (error) {
       console.error("Error creating task:", error)
+    }
+  }
+
+  const toggleEmailNotifications = async () => {
+    try {
+      const newValue = !preferences?.emailNotifications
+      await fetch("/api/user/preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emailNotifications: newValue }),
+      })
+      mutatePrefs()
+    } catch (error) {
+      console.error("Error updating preferences:", error)
     }
   }
 
@@ -779,10 +808,30 @@ export default function TaskDashboard() {
                   <div className="border-t pt-6">
                     <h2 className="text-lg font-semibold mb-1">Appearance</h2>
                     <p className="text-sm text-muted-foreground mb-4">Customize how TaskFlow looks for you.</p>
-                    <Button variant="outline" onClick={toggleDarkMode}>
+                    <Button variant="outline" onClick={toggleDarkMode} className="w-full sm:w-auto">
                       {darkMode ? <Sun className="mr-2 size-5" /> : <Moon className="mr-2 size-5" />}
                       Switch to {darkMode ? "Light" : "Dark"} Mode
                     </Button>
+                  </div>
+
+                  <div className="border-t pt-6">
+                    <h2 className="text-lg font-semibold mb-1">Notifications</h2>
+                    <p className="text-sm text-muted-foreground mb-4">Manage how you receive updates about your tasks.</p>
+                    <div className="flex items-center justify-between p-4 bg-accent rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                          <Mail className="size-5 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">Email Reminders</p>
+                          <p className="text-xs text-muted-foreground">Receive a summary of upcoming tasks in your inbox.</p>
+                        </div>
+                      </div>
+                      <Checkbox
+                        checked={preferences?.emailNotifications ?? true}
+                        onCheckedChange={toggleEmailNotifications}
+                      />
+                    </div>
                   </div>
                 </CardContent>
               </Card>
