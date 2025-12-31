@@ -53,29 +53,34 @@ export const authOptions: NextAuthConfig = {
   callbacks: {
     async signIn({ user, account }: any) {
       if (account?.provider === 'google') {
-        // Handle Google OAuth
-        if (user.email) {
-          const existingUser = await prisma.user.findUnique({
-            where: { email: user.email },
-          })
-
-          if (!existingUser) {
-            // Create new user from Google
-            await prisma.user.create({
-              data: {
-                email: user.email,
-                name: user.name || null,
-                image: user.image || null,
-                emailVerified: new Date(),
-              },
-            })
-          } else if (!existingUser.image && user.image) {
-            // Update image if missing
-            await prisma.user.update({
+        try {
+          // Handle Google OAuth
+          if (user.email) {
+            const existingUser = await prisma.user.findUnique({
               where: { email: user.email },
-              data: { image: user.image },
             })
+
+            if (!existingUser) {
+              // Create new user from Google
+              await prisma.user.create({
+                data: {
+                  email: user.email,
+                  name: user.name || null,
+                  image: user.image || null,
+                  emailVerified: new Date(),
+                },
+              })
+            } else if (!existingUser.image && user.image) {
+              // Update image if missing
+              await prisma.user.update({
+                where: { email: user.email },
+                data: { image: user.image },
+              })
+            }
           }
+        } catch (error) {
+          console.error('GOOGLE AUTH ERROR:', error)
+          return false
         }
       }
       return true
@@ -100,6 +105,7 @@ export const authOptions: NextAuthConfig = {
     strategy: 'jwt',
   },
   secret: process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET,
+  debug: true,
   trustHost: true,
 }
 
