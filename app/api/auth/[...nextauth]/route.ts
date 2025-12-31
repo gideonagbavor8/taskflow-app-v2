@@ -56,13 +56,13 @@ export const authOptions: NextAuthConfig = {
         try {
           // Handle Google OAuth
           if (user.email) {
-            const existingUser = await prisma.user.findUnique({
+            const existingUser = await (prisma.user as any).findUnique({
               where: { email: user.email },
             })
 
             if (!existingUser) {
               // Create new user from Google
-              await prisma.user.create({
+              await (prisma.user as any).create({
                 data: {
                   email: user.email,
                   name: user.name || null,
@@ -73,7 +73,7 @@ export const authOptions: NextAuthConfig = {
               })
             } else {
               // Update image if missing and always update lastLogin
-              await prisma.user.update({
+              await (prisma.user as any).update({
                 where: { email: user.email },
                 data: {
                   image: user.image || existingUser.image,
@@ -90,7 +90,7 @@ export const authOptions: NextAuthConfig = {
         // Update lastLogin for credentials users
         if (user.email) {
           try {
-            await prisma.user.update({
+            await (prisma.user as any).update({
               where: { email: user.email },
               data: { lastLogin: new Date() },
             })

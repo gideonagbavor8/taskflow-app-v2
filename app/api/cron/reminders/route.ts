@@ -16,10 +16,10 @@ export async function GET(request: Request) {
         const twentyFourHoursFromNow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
         // 1. Get all users who have email notifications enabled
-        const users = await prisma.user.findMany({
+        const users = await (prisma.user as any).findMany({
             where: {
                 emailNotifications: true,
-                email: { not: null },
+                email: { not: "" },
             },
             include: {
                 tasks: {
@@ -50,7 +50,7 @@ export async function GET(request: Request) {
               <h2 style="color: #0891b2;">TaskFlow Reminders</h2>
               <p>Hi ${user.name || 'there'}, you have tasks that need your attention in the next 24 hours:</p>
               <ul style="list-style: none; padding: 0;">
-                ${user.tasks.map(task => `
+                ${(user.tasks as any[]).map((task: any) => `
                   <li style="margin-bottom: 15px; padding: 10px; background: #f9fafb; border-left: 4px solid #0891b2; border-radius: 4px;">
                     <div style="font-weight: bold; font-size: 16px;">${task.title}</div>
                     <div style="color: #666; font-size: 14px; margin-top: 4px;">${task.description || 'No description'}</div>
