@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
-import { CheckSquare, LayoutDashboard, FolderKanban, Settings, Plus, Menu, X, Moon, Sun, Trash2, Edit2, Sparkles, Wand2 } from "lucide-react"
+import { CheckSquare, LayoutDashboard, FolderKanban, Settings, Plus, Menu, X, Moon, Sun, Trash2, Edit2, Sparkles, Wand2, Bell, AlertCircle, AlertTriangle } from "lucide-react"
 import { signOut, useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
+import { useEffect } from "react"
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE"
 type TaskPriority = "LOW" | "MEDIUM" | "HIGH"
@@ -41,8 +42,63 @@ export default function TaskDashboard() {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [newTask, setNewTask] = useState({ title: "", description: "", priority: "MEDIUM" as TaskPriority, dueDate: "" })
   const [isEnhancing, setIsEnhancing] = useState(false)
+  const [activeReminders, setActiveReminders] = useState<{ id: string; title: string; type: "CRITICAL" | "URGENT" }[]>([])
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default")
 
   const { data: tasks = [], error, isLoading, mutate } = useSWR<Task[]>("/api/tasks", fetcher)
+
+  // Request Notification Permission on mount
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      setNotificationPermission(Notification.permission)
+    }
+  }, [])
+
+  const requestPermission = async () => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      const permission = await Notification.requestPermission()
+      setNotificationPermission(permission)
+    }
+  }
+
+  // Background Reminder Checker
+  useEffect(() => {
+    const checkTasks = () => {
+      const now = new Date().getTime()
+      const urgent: typeof activeReminders = []
+
+      tasks.forEach((task) => {
+        if (task.status === "DONE" || !task.dueDate) return
+
+        const dueTime = new Date(task.dueDate).getTime()
+        const diffInMs = dueTime - now
+        const diffInHours = diffInMs / (1000 * 60 * 60)
+
+        // Critical: < 1 hour
+        if (diffInMs > 0 && diffInHours < 1) {
+          urgent.push({ id: task.id, title: task.title, type: "CRITICAL" })
+
+          // Browser Push Notification (only once per task check if possible)
+          if (notificationPermission === "granted" && diffInHours > 0.98) { // Only if just entering critical range
+            new Notification("Task Due Soon!", {
+              body: `${task.title} is due in less than an hour.`,
+              icon: "/favicon.ico"
+            })
+          }
+        }
+        // Urgent: < 24 hours
+        else if (diffInMs > 0 && diffInHours < 24) {
+          urgent.push({ id: task.id, title: task.title, type: "URGENT" })
+        }
+      });
+
+      setActiveReminders(urgent)
+    }
+
+    checkTasks()
+    const interval = setInterval(checkTasks, 60000) // Check every minute
+    return () => clearInterval(interval)
+  }, [tasks, notificationPermission])
 
   // Redirect if not authenticated
   if (status === "loading") {
@@ -340,6 +396,49 @@ export default function TaskDashboard() {
             )}
           </div>
 
+          {/* Active Reminders Banner */}
+          {activeReminders.length > 0 && (
+            <div className="mt-4 space-y-2">
+              {activeReminders.map((reminder) => (
+                <div
+                  key={reminder.id}
+                  className={`flex items-center justify-between rounded-lg border px-4 py-2.5 text-sm font-medium animate-pulse ${reminder.type === "CRITICAL"
+                    ? "bg-red-50 border-red-200 text-red-700 dark:bg-red-950/30 dark:border-red-900"
+                    : "bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/30 dark:border-amber-900"
+                    }`}
+                >
+                  <div className="flex items-center gap-2">
+                    {reminder.type === "CRITICAL" ? <AlertCircle className="size-4" /> : <Bell className="size-4" />}
+                    <span>
+                      {reminder.type === "CRITICAL" ? "Critical" : "Upcoming"}: <strong>{reminder.title}</strong> is due {reminder.type === "CRITICAL" ? "very soon!" : "today."}
+                    </span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs hover:bg-black/5"
+                    onClick={() => setActiveTab("Tasks")}
+                  >
+                    View
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Notification Permission Prompt if default */}
+          {notificationPermission === "default" && (
+            <div className="mt-4 p-4 rounded-lg bg-cyan-50 border border-cyan-100 text-cyan-800 dark:bg-cyan-950/30 dark:border-cyan-900 dark:text-cyan-400 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2 text-sm">
+                <Bell className="size-4" />
+                <span>Stay on track! Enable desktop notifications for urgent reminders.</span>
+              </div>
+              <Button size="sm" onClick={requestPermission} className="bg-cyan-600 hover:bg-cyan-700 shrink-0">
+                Enable
+              </Button>
+            </div>
+          )}
+
           {/* Filter Tabs - Only show on Tasks tab */}
           {activeTab === "Tasks" && (
             <div className="mt-4 flex gap-2 overflow-x-auto">
@@ -594,6 +693,12 @@ export default function TaskDashboard() {
                                     <Badge variant="secondary" className={getPriorityColor(task.priority)}>
                                       {task.priority}
                                     </Badge>
+                                    {activeReminders.find(r => r.id === task.id)?.type === "CRITICAL" && (
+                                      <Badge className="bg-red-600 text-white animate-pulse">CRITICAL</Badge>
+                                    )}
+                                    {activeReminders.find(r => r.id === task.id)?.type === "URGENT" && (
+                                      <Badge variant="outline" className="text-amber-600 border-amber-600">DUE SOON</Badge>
+                                    )}
                                   </div>
                                   {task.dueDate && (
                                     <span className="text-xs text-muted-foreground">{formatDate(task.dueDate)}</span>
