@@ -53,28 +53,49 @@ export const authOptions: NextAuthConfig = {
   callbacks: {
     async signIn({ user, account }: any) {
       if (account?.provider === 'google') {
-        // Handle Google OAuth
-        if (user.email) {
-          const existingUser = await prisma.user.findUnique({
-            where: { email: user.email },
-          })
-
-          if (!existingUser) {
-            // Create new user from Google
-            await prisma.user.create({
-              data: {
-                email: user.email,
-                name: user.name || null,
-                image: user.image || null,
-                emailVerified: new Date(),
-              },
+        try {
+          // Handle Google OAuth
+          if (user.email) {
+            const existingUser = await prisma.user.findUnique({
+              where: { email: user.email },
             })
-          } else if (!existingUser.image && user.image) {
-            // Update image if missing
+
+            if (!existingUser) {
+              // Create new user from Google
+              await prisma.user.create({
+                data: {
+                  email: user.email,
+                  name: user.name || null,
+                  image: user.image || null,
+                  emailVerified: new Date(),
+                  lastLogin: new Date(),
+                },
+              })
+            } else {
+              // Update image if missing and always update lastLogin
+              await prisma.user.update({
+                where: { email: user.email },
+                data: {
+                  image: user.image || existingUser.image,
+                  lastLogin: new Date(),
+                },
+              })
+            }
+          }
+        } catch (error) {
+          console.error('GOOGLE AUTH ERROR:', error)
+          return false
+        }
+      } else if (account?.provider === 'credentials') {
+        // Update lastLogin for credentials users
+        if (user.email) {
+          try {
             await prisma.user.update({
               where: { email: user.email },
-              data: { image: user.image },
+              data: { lastLogin: new Date() },
             })
+          } catch (error) {
+            console.error('CREDENTIALS LOGIN TRACKING ERROR:', error)
           }
         }
       }
@@ -100,6 +121,7 @@ export const authOptions: NextAuthConfig = {
     strategy: 'jwt',
   },
   secret: process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET,
+  debug: true,
   trustHost: true,
 }
 
