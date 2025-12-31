@@ -323,17 +323,19 @@ export default function TaskDashboard() {
               <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setSidebarOpen(true)}>
                 <Menu className="size-5" />
               </Button>
-              <h1 className="text-2xl font-bold">
+              <h1 className="text-xl font-bold sm:text-2xl">
                 {activeTab === "Tasks" ? "My Tasks" : activeTab}
               </h1>
             </div>
             {activeTab === "Tasks" && (
               <Button
-                className="bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-700 hover:to-teal-700"
+                size="sm"
+                className="bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-700 hover:to-teal-700 sm:size-default"
                 onClick={() => setShowCreateForm(!showCreateForm)}
               >
-                <Plus className="mr-2 size-4" />
-                New Task
+                <Plus className="size-4 sm:mr-2" />
+                <span className="hidden sm:inline">New Task</span>
+                <span className="sm:hidden">Task</span>
               </Button>
             )}
           </div>
@@ -392,11 +394,11 @@ export default function TaskDashboard() {
                   className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
                   rows={2}
                 />
-                <div className="flex gap-2">
+                <div className="grid grid-cols-1 gap-3 sm:flex sm:items-center sm:gap-2">
                   <select
                     value={newTask.priority}
                     onChange={(e) => setNewTask({ ...newTask, priority: e.target.value as TaskPriority })}
-                    className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white sm:w-auto"
                   >
                     <option value="LOW">Low Priority</option>
                     <option value="MEDIUM">Medium Priority</option>
@@ -406,14 +408,16 @@ export default function TaskDashboard() {
                     type="datetime-local"
                     value={newTask.dueDate}
                     onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
-                    className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white sm:w-auto"
                   />
-                  <Button onClick={handleCreateTask} className="bg-gradient-to-r from-cyan-600 to-teal-600">
-                    Create
-                  </Button>
-                  <Button variant="outline" onClick={() => setShowCreateForm(false)}>
-                    Cancel
-                  </Button>
+                  <div className="flex gap-2 sm:ml-auto">
+                    <Button onClick={handleCreateTask} className="flex-1 bg-gradient-to-r from-cyan-600 to-teal-600 sm:flex-none">
+                      Create
+                    </Button>
+                    <Button variant="outline" onClick={() => setShowCreateForm(false)} className="flex-1 sm:flex-none">
+                      Cancel
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
