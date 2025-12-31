@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
-import { CheckSquare, LayoutDashboard, FolderKanban, Settings, Plus, Menu, X, Moon, Sun, Trash2, Edit2 } from "lucide-react"
+import { CheckSquare, LayoutDashboard, FolderKanban, Settings, Plus, Menu, X, Moon, Sun, Trash2, Edit2, Sparkles, Wand2 } from "lucide-react"
 import { signOut, useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 
@@ -38,6 +38,7 @@ export default function TaskDashboard() {
   const [editDescription, setEditDescription] = useState("")
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [newTask, setNewTask] = useState({ title: "", description: "", priority: "MEDIUM" as TaskPriority, dueDate: "" })
+  const [isEnhancing, setIsEnhancing] = useState(false)
 
   const { data: tasks = [], error, isLoading, mutate } = useSWR<Task[]>("/api/tasks", fetcher)
 
@@ -172,6 +173,38 @@ export default function TaskDashboard() {
       mutate()
     } catch (error) {
       console.error("Error creating task:", error)
+    }
+  }
+
+  const handleAIEnhance = async () => {
+    if (!newTask.title.trim()) return
+
+    setIsEnhancing(true)
+    try {
+      const res = await fetch("/api/assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          intent: "enhance",
+          taskInput: `${newTask.title} ${newTask.description}`
+        }),
+      })
+
+      const responseData = await res.json()
+
+      if (responseData.success && responseData.data) {
+        const { title, description, priority } = responseData.data
+        setNewTask(prev => ({
+          ...prev,
+          title: title || prev.title,
+          description: description || prev.description,
+          priority: (priority as TaskPriority) || prev.priority
+        }))
+      }
+    } catch (error) {
+      console.error("AI Enhance failed:", error)
+    } finally {
+      setIsEnhancing(false)
     }
   }
 
@@ -324,6 +357,22 @@ export default function TaskDashboard() {
                   onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
                   className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
                 />
+                <div className="flex justify-end">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900/20 -mt-2"
+                    onClick={handleAIEnhance}
+                    disabled={isEnhancing || !newTask.title.trim()}
+                  >
+                    {isEnhancing ? (
+                      <div className="mr-2 size-4 animate-spin rounded-full border-2 border-current border-r-transparent" />
+                    ) : (
+                      <Sparkles className="mr-2 size-4" />
+                    )}
+                    {isEnhancing ? "Magically optimizing..." : "Magic Enhance"}
+                  </Button>
+                </div>
                 <textarea
                   placeholder="Description (optional)"
                   value={newTask.description}
