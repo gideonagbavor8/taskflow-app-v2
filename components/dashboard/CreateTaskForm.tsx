@@ -11,6 +11,7 @@ interface CreateTaskFormProps {
     onCancel: () => void
     onEnhance: () => void
     isEnhancing: boolean
+    projects?: Array<{ id: string; name: string; color: string }>
 }
 
 export function CreateTaskForm({
@@ -19,7 +20,8 @@ export function CreateTaskForm({
     onSave,
     onCancel,
     onEnhance,
-    isEnhancing
+    isEnhancing,
+    projects = []
 }: CreateTaskFormProps) {
     return (
         <div className="border-b border-border bg-card p-6">
@@ -56,6 +58,20 @@ export function CreateTaskForm({
                         rows={2}
                     />
                     <div className="grid grid-cols-1 gap-3 sm:flex sm:items-center sm:gap-2">
+                        {projects.length > 0 && (
+                            <select
+                                value={newTask.projectId || ""}
+                                onChange={(e) => setNewTask({ ...newTask, projectId: e.target.value || null })}
+                                className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white sm:w-auto"
+                            >
+                                <option value="">No Project</option>
+                                {projects.map((project) => (
+                                    <option key={project.id} value={project.id}>
+                                        {project.name}
+                                    </option>
+                                ))}
+                            </select>
+                        )}
                         <select
                             value={newTask.priority}
                             onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })}

@@ -18,6 +18,15 @@ export async function GET() {
 
     const tasks = await prisma.task.findMany({
       where: { userId: userRecord.id },
+      include: {
+        project: {
+          select: {
+            id: true,
+            name: true,
+            color: true,
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     })
 
@@ -50,6 +59,22 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const validatedData = createTaskSchema.parse(body)
 
+    // Verify project belongs to user if projectId is provided
+    if (validatedData.projectId) {
+      const project = await prisma.project.findFirst({
+        where: {
+          id: validatedData.projectId,
+          userId: userRecord.id,
+        },
+      })
+      if (!project) {
+        return NextResponse.json(
+          { error: 'Project not found or access denied' },
+          { status: 404 }
+        )
+      }
+    }
+
     const task = await prisma.task.create({
       data: {
         title: validatedData.title,
@@ -60,6 +85,16 @@ export async function POST(request: NextRequest) {
           ? new Date(validatedData.dueDate) 
           : null,
         userId: userRecord.id,
+        projectId: validatedData.projectId || null,
+      },
+      include: {
+        project: {
+          select: {
+            id: true,
+            name: true,
+            color: true,
+          },
+        },
       },
     })
 

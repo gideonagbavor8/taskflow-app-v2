@@ -36,6 +36,22 @@ export async function PATCH(
     const body = await request.json()
     const validatedData = updateTaskSchema.parse(body)
 
+    // Verify project belongs to user if projectId is being updated
+    if (validatedData.projectId !== undefined && validatedData.projectId !== null) {
+      const project = await prisma.project.findFirst({
+        where: {
+          id: validatedData.projectId,
+          userId: userRecord.id,
+        },
+      })
+      if (!project) {
+        return NextResponse.json(
+          { error: 'Project not found or access denied' },
+          { status: 404 }
+        )
+      }
+    }
+
     const updateData: any = {}
     if (validatedData.title !== undefined) updateData.title = validatedData.title
     if (validatedData.description !== undefined) updateData.description = validatedData.description
@@ -46,10 +62,22 @@ export async function PATCH(
         ? new Date(validatedData.dueDate)
         : null
     }
+    if (validatedData.projectId !== undefined) {
+      updateData.projectId = validatedData.projectId || null
+    }
 
     const task = await prisma.task.update({
       where: { id },
       data: updateData,
+      include: {
+        project: {
+          select: {
+            id: true,
+            name: true,
+            color: true,
+          },
+        },
+      },
     })
 
     return NextResponse.json(task)

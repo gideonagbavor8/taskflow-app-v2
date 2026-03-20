@@ -9,6 +9,7 @@ export const createTaskSchema = z.object({
   status: taskStatusEnum.optional().default('TODO'),
   priority: taskPriorityEnum.optional().default('MEDIUM'),
   dueDate: z.string().optional().nullable(),
+  projectId: z.string().uuid().optional().nullable(),
 })
 
 export const updateTaskSchema = z.object({
@@ -17,6 +18,7 @@ export const updateTaskSchema = z.object({
   status: taskStatusEnum.optional(),
   priority: taskPriorityEnum.optional(),
   dueDate: z.string().optional().nullable(),
+  projectId: z.string().uuid().optional().nullable(),
 })
 
 export type CreateTaskInput = z.infer<typeof createTaskSchema>

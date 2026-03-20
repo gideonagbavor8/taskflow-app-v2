@@ -111,6 +111,15 @@ export function TaskCard({
                                     </div>
                                 </div>
                                 <p className="line-clamp-2 text-sm text-muted-foreground">{task.description}</p>
+                                {task.project && (
+                                    <div className="flex items-center gap-1">
+                                        <div
+                                            className="size-2 rounded-full"
+                                            style={{ backgroundColor: task.project.color }}
+                                        />
+                                        <span className="text-xs text-muted-foreground">{task.project.name}</span>
+                                    </div>
+                                )}
                                 <div className="flex items-center justify-between gap-2 flex-wrap">
                                     <div className="flex gap-2 flex-wrap">
                                         <Badge variant="secondary" className={getStatusColor(task.status)}>

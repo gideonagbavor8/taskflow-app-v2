@@ -22,6 +22,7 @@ model User {
   createdAt          DateTime @default(now())
   updatedAt     DateTime @updatedAt
   tasks         Task[]
+  projects      Project[]
 }
 
 model Task {
@@ -35,6 +36,23 @@ model Task {
   updatedAt   DateTime    @updatedAt
   userId      String
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId   String?
+  project     Project?    @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([projectId])
+}
+
+model Project {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  color       String?  @default("#0891b2") // Default cyan color
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks       Task[]
 
   @@index([userId])
 }

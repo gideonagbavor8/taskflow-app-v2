@@ -1,10 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { CheckSquare, Plus, Menu, Bell, AlertCircle, Mail, Sun, Moon, FolderKanban } from "lucide-react"
+import { CheckSquare, Plus, Menu, Bell, AlertCircle, Mail, Sun, Moon, FolderKanban, Search, ArrowUpDown } from "lucide-react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 
@@ -13,6 +13,7 @@ import { Sidebar } from "./dashboard/Sidebar"
 import { DashboardStats } from "./dashboard/DashboardStats"
 import { TaskCard } from "./dashboard/TaskCard"
 import { CreateTaskForm } from "./dashboard/CreateTaskForm"
+import { ProjectsView } from "./dashboard/ProjectsView"
 import { Checkbox } from "@/components/ui/checkbox"
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE"
@@ -31,7 +32,12 @@ interface Task {
   updatedAt: string
 }
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json())
+const fetcher = async (url: string) => {
+  const res = await fetch(url)
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error || 'Failed to fetch')
+  return data
+}
 
 export default function TaskDashboard() {
   const { data: session, status } = useSession()
@@ -44,13 +50,16 @@ export default function TaskDashboard() {
   const [editTitle, setEditTitle] = useState("")
   const [editDescription, setEditDescription] = useState("")
   const [showCreateForm, setShowCreateForm] = useState(false)
-  const [newTask, setNewTask] = useState({ title: "", description: "", priority: "MEDIUM" as TaskPriority, dueDate: "" })
+  const [newTask, setNewTask] = useState({ title: "", description: "", priority: "MEDIUM" as TaskPriority, dueDate: "", projectId: null as string | null })
   const [isEnhancing, setIsEnhancing] = useState(false)
   const [activeReminders, setActiveReminders] = useState<{ id: string; title: string; type: "CRITICAL" | "URGENT" }[]>([])
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default")
+  const [searchQuery, setSearchQuery] = useState("")
+  const [sortBy, setSortBy] = useState<"date" | "priority" | "status">("date")
 
   const { data: tasks = [], mutate } = useSWR<Task[]>("/api/tasks", fetcher)
   const { data: preferences, mutate: mutatePrefs } = useSWR("/api/user/preferences", fetcher)
+  const { data: projects = [] } = useSWR("/api/projects", fetcher)
 
   useEffect(() => {
     if (typeof window !== "undefined" && "Notification" in window) {
@@ -65,36 +74,73 @@ export default function TaskDashboard() {
     }
   }
 
-  // Background Reminder Checker
+  // Compute reminders using useMemo
+  const computedReminders = useMemo(() => {
+    const now = new Date().getTime()
+    const urgent: typeof activeReminders = []
+
+    if (!Array.isArray(tasks)) return []
+
+    tasks.forEach((task) => {
+      if (task.status === "DONE" || !task.dueDate) return
+
+      const dueTime = new Date(task.dueDate).getTime()
+      const diffInMs = dueTime - now
+      const diffInHours = diffInMs / (1000 * 60 * 60)
+
+      if (diffInMs > 0 && diffInHours < 1) {
+        urgent.push({ id: task.id, title: task.title, type: "CRITICAL" })
+      } else if (diffInMs > 0 && diffInHours < 24) {
+        urgent.push({ id: task.id, title: task.title, type: "URGENT" })
+      }
+    })
+
+    return urgent
+  }, [tasks])
+
+  // Update activeReminders only when computed reminders change
+  const prevRemindersRef = useRef<string>('')
+  
   useEffect(() => {
-    const checkTasks = () => {
+    const newIds = computedReminders.map(r => r.id).sort().join(',')
+    
+    if (prevRemindersRef.current !== newIds) {
+      prevRemindersRef.current = newIds
+      setActiveReminders(computedReminders)
+    }
+  }, [computedReminders])
+
+  // Handle notifications separately with interval
+  const notifiedTasksRef = useRef<Set<string>>(new Set())
+  
+  useEffect(() => {
+    if (notificationPermission !== "granted") return
+
+    const checkNotifications = () => {
       const now = new Date().getTime()
-      const urgent: typeof activeReminders = []
+      
+      if (!Array.isArray(tasks)) return
 
       tasks.forEach((task) => {
         if (task.status === "DONE" || !task.dueDate) return
+        if (notifiedTasksRef.current.has(task.id)) return
 
         const dueTime = new Date(task.dueDate).getTime()
         const diffInMs = dueTime - now
         const diffInHours = diffInMs / (1000 * 60 * 60)
 
-        if (diffInMs > 0 && diffInHours < 1) {
-          urgent.push({ id: task.id, title: task.title, type: "CRITICAL" })
-          if (notificationPermission === "granted" && diffInHours > 0.98) {
-            new Notification("Task Due Soon!", {
-              body: `${task.title} is due in less than an hour.`,
-              icon: "/favicon.ico"
-            })
-          }
-        } else if (diffInMs > 0 && diffInHours < 24) {
-          urgent.push({ id: task.id, title: task.title, type: "URGENT" })
+        if (diffInMs > 0 && diffInHours < 1 && diffInHours > 0.98) {
+          new Notification("Task Due Soon!", {
+            body: `${task.title} is due in less than an hour.`,
+            icon: "/favicon.ico"
+          })
+          notifiedTasksRef.current.add(task.id)
         }
-      });
-      setActiveReminders(urgent)
+      })
     }
 
-    checkTasks()
-    const interval = setInterval(checkTasks, 60000)
+    checkNotifications()
+    const interval = setInterval(checkNotifications, 60000)
     return () => clearInterval(interval)
   }, [tasks, notificationPermission])
 
@@ -161,7 +207,7 @@ export default function TaskDashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...newTask, dueDate: newTask.dueDate || null }),
       })
-      setNewTask({ title: "", description: "", priority: "MEDIUM", dueDate: "" })
+      setNewTask({ title: "", description: "", priority: "MEDIUM", dueDate: "", projectId: null })
       setShowCreateForm(false)
       mutate()
     } catch (error) { console.error(error) }
@@ -195,13 +241,36 @@ export default function TaskDashboard() {
     } catch (error) { console.error(error) }
   }
 
-  const filteredTasks = tasks.filter((task) => {
-    if (activeFilter === "All") return true
-    if (activeFilter === "Completed") return task.status === "DONE"
-    if (activeFilter === "Today") return task.dueDate && new Date(task.dueDate).toDateString() === new Date().toDateString()
-    if (activeFilter === "Upcoming") return task.dueDate && new Date(task.dueDate) > new Date() && task.status !== "DONE"
-    return true
-  })
+  const filteredTasks = (Array.isArray(tasks) ? tasks : [])
+    .filter((task) => {
+      // Filter by active filter tab
+      if (activeFilter === "Completed" && task.status !== "DONE") return false
+      if (activeFilter === "Today" && (!task.dueDate || new Date(task.dueDate).toDateString() !== new Date().toDateString())) return false
+      if (activeFilter === "Upcoming" && (!task.dueDate || new Date(task.dueDate) <= new Date() || task.status === "DONE")) return false
+      
+      // Filter by search query
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase()
+        return (
+          task.title.toLowerCase().includes(query) ||
+          task.description.toLowerCase().includes(query)
+        )
+      }
+      
+      return true
+    })
+    .sort((a, b) => {
+      if (sortBy === "priority") {
+        const priorityOrder = { HIGH: 3, MEDIUM: 2, LOW: 1 }
+        return priorityOrder[b.priority] - priorityOrder[a.priority]
+      }
+      if (sortBy === "status") {
+        const statusOrder = { DONE: 3, IN_PROGRESS: 2, TODO: 1 }
+        return statusOrder[b.status] - statusOrder[a.status]
+      }
+      // Default: sort by date (newest first)
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    })
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -250,16 +319,42 @@ export default function TaskDashboard() {
           )}
 
           {activeTab === "Tasks" && (
-            <div className="mt-4 flex gap-2 overflow-x-auto">
-              {["All", "Today", "Upcoming", "Completed"].map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveFilter(tab as FilterTab)}
-                  className={`rounded-lg px-4 py-2 text-sm font-medium ${activeFilter === tab ? "bg-cyan-100 text-cyan-700" : "text-muted-foreground hover:bg-accent"}`}
-                >
-                  {tab}
-                </button>
-              ))}
+            <div className="mt-4 space-y-4">
+              <div className="flex gap-2 overflow-x-auto">
+                {["All", "Today", "Upcoming", "Completed"].map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveFilter(tab as FilterTab)}
+                    className={`rounded-lg px-4 py-2 text-sm font-medium ${activeFilter === tab ? "bg-cyan-100 text-cyan-700" : "text-muted-foreground hover:bg-accent"}`}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-2 flex-wrap items-center">
+                <div className="relative flex-1 min-w-[200px]">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 size-4 text-muted-foreground" />
+                  <input
+                    type="text"
+                    placeholder="Search tasks..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <ArrowUpDown className="size-4 text-muted-foreground" />
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as "date" | "priority" | "status")}
+                    className="px-3 py-2 border rounded-lg text-sm"
+                  >
+                    <option value="date">Sort by Date</option>
+                    <option value="priority">Sort by Priority</option>
+                    <option value="status">Sort by Status</option>
+                  </select>
+                </div>
+              </div>
             </div>
           )}
         </header>
@@ -272,6 +367,7 @@ export default function TaskDashboard() {
             onCancel={() => setShowCreateForm(false)}
             onEnhance={handleAIEnhance}
             isEnhancing={isEnhancing}
+            projects={projects}
           />
         )}
 
@@ -318,12 +414,7 @@ export default function TaskDashboard() {
             </div>
           )}
 
-          {activeTab === "Projects" && (
-            <div className="flex flex-col items-center justify-center h-64 text-center">
-              <FolderKanban className="size-16 text-muted-foreground/30 mb-4" />
-              <h2 className="text-xl font-semibold mb-2">Projects View coming soon!</h2>
-            </div>
-          )}
+          {activeTab === "Projects" && <ProjectsView />}
 
           {activeTab === "Settings" && (
             <div className="max-w-2xl space-y-6">
