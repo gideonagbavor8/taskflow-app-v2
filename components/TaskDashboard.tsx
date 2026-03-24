@@ -202,15 +202,20 @@ export default function TaskDashboard() {
   const handleCreateTask = async () => {
     if (!newTask.title.trim()) return
     try {
-      await fetch("/api/tasks", {
+      const res = await fetch("/api/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...newTask, dueDate: newTask.dueDate || null }),
       })
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        alert(`Failed to create task: ${errorData.error || 'Server error'}`)
+        return
+      }
       setNewTask({ title: "", description: "", priority: "MEDIUM", dueDate: "", projectId: null })
       setShowCreateForm(false)
       mutate()
-    } catch (error) { console.error(error) }
+    } catch (error) { console.error(error); alert("Network error failed to create task") }
   }
 
   const handleAIEnhance = async () => {
