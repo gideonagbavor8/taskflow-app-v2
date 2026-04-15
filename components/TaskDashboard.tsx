@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { AlertBanner, type Alert } from "@/components/AlertBanner"
-import { CheckSquare, LayoutDashboard, FolderKanban, Settings, Plus, Menu, X, Moon, Sun, Trash2, Edit2, Sparkles, Wand2 } from "lucide-react"
+import { CheckSquare, LayoutDashboard, FolderKanban, Settings, Plus, Menu, X, Moon, Sun, Trash2, Edit2, Sparkles, Wand2, MessageSquare } from "lucide-react"
 import { signOut, useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 
@@ -398,6 +398,14 @@ export default function TaskDashboard() {
                   Dark Mode
                 </>
               )}
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full justify-start bg-transparent text-cyan-600 hover:text-cyan-700 dark:text-cyan-400 mb-2"
+              onClick={() => window.open("https://docs.google.com/forms/d/e/1FAIpQLSegTBIFmQCh-wR90E393Aj_qszr_TCOPxM5NA9iH29SljmN0A/viewform?usp=sharing", "_blank")}
+            >
+              <MessageSquare className="mr-2 size-4" />
+              Send Feedback
             </Button>
             <Button
               variant="outline"
