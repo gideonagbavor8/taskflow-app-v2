@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -44,7 +44,14 @@ export default function TaskDashboard() {
 
   const { data: tasks = [], error, isLoading, mutate } = useSWR<Task[]>("/api/tasks", fetcher)
 
-  // Redirect if not authenticated
+  // Redirect if not authenticated safely using useEffect
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/login")
+    }
+  }, [status, router])
+
+  // Show loading spinner while Auth is initializing
   if (status === "loading") {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -57,7 +64,6 @@ export default function TaskDashboard() {
   }
 
   if (status === "unauthenticated") {
-    router.push("/login")
     return null
   }
 
