@@ -1,11 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
+import { AlertBanner, type Alert } from "@/components/AlertBanner"
 import { CheckSquare, LayoutDashboard, FolderKanban, Settings, Plus, Menu, X, Moon, Sun, Trash2, Edit2, Sparkles, Wand2 } from "lucide-react"
 import { signOut, useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
@@ -41,6 +42,8 @@ export default function TaskDashboard() {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [newTask, setNewTask] = useState({ title: "", description: "", priority: "MEDIUM" as TaskPriority, dueDate: "" })
   const [isEnhancing, setIsEnhancing] = useState(false)
+  const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set())
+  const [alertTypeFilter, setAlertTypeFilter] = useState<string | null>(null)
 
   const { data: tasks = [], error, isLoading, mutate } = useSWR<Task[]>("/api/tasks", fetcher)
 
@@ -50,6 +53,74 @@ export default function TaskDashboard() {
       router.push("/login")
     }
   }, [status, router])
+
+  // Generate alerts from tasks (Grouped and Derived via useMemo)
+  const alerts = useMemo(() => {
+    const newAlerts: Alert[] = []
+    const now = new Date()
+    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000)
+
+    const overdueTasks = tasks.filter(t => t.status !== "DONE" && t.dueDate && new Date(t.dueDate) < now)
+    const dueSoonTasks = tasks.filter(t => t.status !== "DONE" && t.dueDate && new Date(t.dueDate) >= now && new Date(t.dueDate) <= tomorrow)
+    const highPriorityTasks = tasks.filter(t => t.status !== "DONE" && t.priority === "HIGH")
+
+    // 1. Overdue Summary
+    if (overdueTasks.length > 0) {
+      newAlerts.push({
+        id: "summary-overdue",
+        type: "overdue",
+        title: "Critical: Overdue Tasks",
+        message: `You have ${overdueTasks.length} task${overdueTasks.length > 1 ? "s" : ""} past the deadline. Please take action immediately.`,
+        taskId: "multiple",
+        permanent: true,
+        action: () => {
+          setActiveTab("Tasks")
+          setAlertTypeFilter("overdue")
+        }
+      })
+    }
+
+    // 2. Due Soon Summary
+    if (dueSoonTasks.length > 0 && !dismissedAlerts.has("summary-due-soon")) {
+      newAlerts.push({
+        id: "summary-due-soon",
+        type: "due-soon",
+        title: "Due Soon",
+        message: `${dueSoonTasks.length} task${dueSoonTasks.length > 1 ? "s are" : " is"} due within the next 24 hours.`,
+        taskId: "multiple",
+        action: () => {
+          setActiveTab("Tasks")
+          setAlertTypeFilter("due-soon")
+        }
+      })
+    }
+
+    // 3. High Priority Summary
+    if (highPriorityTasks.length > 0 && !dismissedAlerts.has("summary-high-priority")) {
+      newAlerts.push({
+        id: "summary-high-priority",
+        type: "high-priority",
+        title: "Priority Tasks",
+        message: `There ${highPriorityTasks.length > 1 ? "are" : "is"} ${highPriorityTasks.length} high priority task${highPriorityTasks.length > 1 ? "s" : ""} awaiting your attention.`,
+        taskId: "multiple",
+        action: () => {
+          setActiveTab("Tasks")
+          setAlertTypeFilter("high-priority")
+        }
+      })
+    }
+
+    return newAlerts
+  }, [tasks, dismissedAlerts])
+
+  // Set up polling to refresh alerts frequently
+  useEffect(() => {
+    const pollInterval = setInterval(() => {
+      mutate()
+    }, 30000) // Refresh every 30 seconds to keep alerts fresh
+
+    return () => clearInterval(pollInterval)
+  }, [mutate])
 
   // Show loading spinner while Auth is initializing
   if (status === "loading") {
@@ -65,6 +136,10 @@ export default function TaskDashboard() {
 
   if (status === "unauthenticated") {
     return null
+  }
+
+  const handleDismissAlert = (alertId: string) => {
+    setDismissedAlerts(prev => new Set([...prev, alertId]))
   }
 
   const getPriorityColor = (priority: TaskPriority) => {
@@ -217,6 +292,20 @@ export default function TaskDashboard() {
   }
 
   const filteredTasks = tasks.filter((task) => {
+    const now = new Date()
+    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000)
+
+    if (alertTypeFilter) {
+      switch (alertTypeFilter) {
+        case "overdue":
+          return task.status !== "DONE" && task.dueDate && new Date(task.dueDate) < now
+        case "due-soon":
+          return task.status !== "DONE" && task.dueDate && new Date(task.dueDate) >= now && new Date(task.dueDate) <= tomorrow
+        case "high-priority":
+          return task.status !== "DONE" && task.priority === "HIGH"
+      }
+    }
+
     if (activeFilter === "All") return true
     if (activeFilter === "Completed") return task.status === "DONE"
     if (activeFilter === "Today") {
@@ -224,7 +313,7 @@ export default function TaskDashboard() {
       return task.dueDate && new Date(task.dueDate).toDateString() === today
     }
     if (activeFilter === "Upcoming") {
-      return task.dueDate && new Date(task.dueDate) > new Date() && task.status !== "DONE"
+      return task.dueDate && new Date(task.dueDate) > now && task.status !== "DONE"
     }
     return true
   })
@@ -346,19 +435,35 @@ export default function TaskDashboard() {
 
           {/* Filter Tabs - Only show on Tasks tab */}
           {activeTab === "Tasks" && (
-            <div className="mt-4 flex gap-2 overflow-x-auto">
-              {filterTabs.map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveFilter(tab)}
-                  className={`whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeFilter === tab
-                    ? "bg-cyan-100 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-400"
-                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                    }`}
+            <div className="mt-4 flex items-center justify-between">
+              <div className="flex gap-2 overflow-x-auto">
+                {filterTabs.map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => {
+                      setActiveFilter(tab)
+                      setAlertTypeFilter(null)
+                    }}
+                    className={`whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeFilter === tab && !alertTypeFilter
+                      ? "bg-cyan-100 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-400"
+                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                      }`}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
+              
+              {alertTypeFilter && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setAlertTypeFilter(null)}
+                  className="text-cyan-600 font-bold"
                 >
-                  {tab}
-                </button>
-              ))}
+                  Clear Alert Filter <X className="ml-2 size-4" />
+                </Button>
+              )}
             </div>
           )}
         </header>
@@ -427,15 +532,19 @@ export default function TaskDashboard() {
         )}
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-6 relative">
+          {/* Global Sticky Alerts */}
+          {alerts.length > 0 && <AlertBanner alerts={alerts} onDismiss={handleDismissAlert} />}
+
           {activeTab === "Dashboard" && (
             <div className="space-y-6">
+
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {[
                   { label: "Total Tasks", value: tasks.length, color: "text-cyan-600" },
                   { label: "Completed", value: tasks.filter(t => t.status === "DONE").length, color: "text-green-600" },
                   { label: "In Progress", value: tasks.filter(t => t.status === "IN_PROGRESS").length, color: "text-blue-600" },
-                  { label: "High Priority", value: tasks.filter(t => t.priority === "HIGH" && t.status !== "DONE").length, color: "text-red-600" }
+                  { label: "Alerts", value: alerts.length, color: "text-amber-600" }
                 ].map((stat) => (
                   <Card key={stat.label}>
                     <CardContent className="p-6">
