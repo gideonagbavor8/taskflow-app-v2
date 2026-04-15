@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   description: "A professional task management application with AI-powered features and live dashboard analytics.",
   openGraph: {
     title: "TaskFlow | Smart Task Management",
-    description: "Manage your tasks efficiently with AI insights and a live dashboard.",
+    description: "Manage your tasks efficiently with a live dashboard.",
     url: "https://taskflow-app-v2.vercel.app",
     siteName: "TaskFlow",
     type: "website",

@@ -17,7 +17,7 @@ export async function POST(req: Request) {
 
         // 2. Initialize the Gemini Model
         const genAI = new GoogleGenerativeAI(apiKey)
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' }) // Switched to flash (faster/newer)
+        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
 
         // 3. Parse the user's request
         const body = await req.json()
