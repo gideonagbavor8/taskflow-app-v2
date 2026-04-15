@@ -18,6 +18,15 @@ export async function GET() {
 
     const tasks = await prisma.task.findMany({
       where: { userId: userRecord.id },
+      include: {
+        project: {
+          select: {
+            id: true,
+            name: true,
+            color: true,
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     })
 
@@ -60,8 +69,19 @@ export async function POST(request: NextRequest) {
           ? new Date(validatedData.dueDate) 
           : null,
         userId: userRecord.id,
+        projectId: validatedData.projectId || null,
+      },
+      include: {
+        project: {
+          select: {
+            id: true,
+            name: true,
+            color: true,
+          },
+        },
       },
     })
+
 
     return NextResponse.json(task, { status: 201 })
   } catch (error: any) {

@@ -27,7 +27,10 @@ interface Task {
   updatedAt: string
 }
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json())
+const fetcher = (url: string) => fetch(url).then((res) => {
+  if (!res.ok) throw new Error("Failed to fetch")
+  return res.json()
+})
 
 export default function TaskDashboard() {
   const { data: session, status } = useSession()
@@ -59,6 +62,8 @@ export default function TaskDashboard() {
     const newAlerts: Alert[] = []
     const now = new Date()
     const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000)
+
+    if (!Array.isArray(tasks)) return []
 
     const overdueTasks = tasks.filter(t => t.status !== "DONE" && t.dueDate && new Date(t.dueDate) < now)
     const dueSoonTasks = tasks.filter(t => t.status !== "DONE" && t.dueDate && new Date(t.dueDate) >= now && new Date(t.dueDate) <= tomorrow)
@@ -291,7 +296,7 @@ export default function TaskDashboard() {
     }
   }
 
-  const filteredTasks = tasks.filter((task) => {
+  const filteredTasks = Array.isArray(tasks) ? tasks.filter((task) => {
     const now = new Date()
     const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000)
 
@@ -316,7 +321,7 @@ export default function TaskDashboard() {
       return task.dueDate && new Date(task.dueDate) > now && task.status !== "DONE"
     }
     return true
-  })
+  }) : []
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return null
@@ -541,9 +546,9 @@ export default function TaskDashboard() {
 
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {[
-                  { label: "Total Tasks", value: tasks.length, color: "text-cyan-600" },
-                  { label: "Completed", value: tasks.filter(t => t.status === "DONE").length, color: "text-green-600" },
-                  { label: "In Progress", value: tasks.filter(t => t.status === "IN_PROGRESS").length, color: "text-blue-600" },
+                  { label: "Total Tasks", value: Array.isArray(tasks) ? tasks.length : 0, color: "text-cyan-600" },
+                  { label: "Completed", value: Array.isArray(tasks) ? tasks.filter(t => t.status === "DONE").length : 0, color: "text-green-600" },
+                  { label: "In Progress", value: Array.isArray(tasks) ? tasks.filter(t => t.status === "IN_PROGRESS").length : 0, color: "text-blue-600" },
                   { label: "Alerts", value: alerts.length, color: "text-amber-600" }
                 ].map((stat) => (
                   <Card key={stat.label}>
@@ -561,8 +566,8 @@ export default function TaskDashboard() {
                     <h2 className="mb-4 text-lg font-semibold">Priority Distribution</h2>
                     <div className="space-y-4">
                       {["HIGH", "MEDIUM", "LOW"].map((p) => {
-                        const count = tasks.filter(t => t.priority === p).length;
-                        const percent = tasks.length ? (count / tasks.length) * 100 : 0;
+                        const count = Array.isArray(tasks) ? tasks.filter(t => t.priority === p).length : 0;
+                        const percent = Array.isArray(tasks) && tasks.length ? (count / tasks.length) * 100 : 0;
                         return (
                           <div key={p} className="space-y-1">
                             <div className="flex justify-between text-sm">
