@@ -48,7 +48,8 @@ export default function TaskDashboard() {
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set())
   const [alertTypeFilter, setAlertTypeFilter] = useState<string | null>(null)
 
-  const { data: tasks = [], error, isLoading, mutate } = useSWR<Task[]>("/api/tasks", fetcher)
+  const { data, error, isLoading, mutate } = useSWR<Task[]>("/api/tasks", fetcher)
+  const tasks = Array.isArray(data) ? data : []
 
   // Redirect if not authenticated safely using useEffect
   useEffect(() => {
