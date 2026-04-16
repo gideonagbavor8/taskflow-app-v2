@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { AlertBanner, type Alert } from "@/components/AlertBanner"
-import { CheckSquare, LayoutDashboard, FolderKanban, Settings, Plus, Menu, X, Moon, Sun, Trash2, Edit2, Sparkles, Wand2, MessageSquare, Calendar } from "lucide-react"
+import { CheckSquare, LayoutDashboard, FolderKanban, Settings, Plus, Menu, X, Moon, Sun, Trash2, Edit2, Sparkles, Wand2, MessageSquare, Calendar, PartyPopper } from "lucide-react"
 import { signOut, useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 
@@ -43,6 +43,7 @@ export default function TaskDashboard() {
   const [editTitle, setEditTitle] = useState("")
   const [editDescription, setEditDescription] = useState("")
   const [showCreateForm, setShowCreateForm] = useState(false)
+  const [showCelebration, setShowCelebration] = useState(false)
   const [showAlerts, setShowAlerts] = useState(false)
   const [newTask, setNewTask] = useState({ title: "", description: "", priority: "MEDIUM" as TaskPriority, dueDate: "" })
   const [isEnhancing, setIsEnhancing] = useState(false)
@@ -51,6 +52,14 @@ export default function TaskDashboard() {
 
   const { data, error, isLoading, mutate } = useSWR<Task[]>("/api/tasks", fetcher)
   const tasks = Array.isArray(data) ? data : []
+
+  // Stats for gamification
+  const stats = useMemo(() => {
+    if (!Array.isArray(tasks)) return { completed: 0, pending: 0, total: 0 }
+    const completed = tasks.filter(t => t.status === "DONE").length
+    const total = tasks.length
+    return { completed, pending: total - completed, total }
+  }, [tasks])
 
   // Redirect if not authenticated safely using useEffect
   useEffect(() => {
@@ -195,6 +204,10 @@ export default function TaskDashboard() {
 
   const handleStatusChange = async (taskId: string, newStatus: TaskStatus) => {
     try {
+      if (newStatus === "DONE") {
+        setShowCelebration(true)
+        setTimeout(() => setShowCelebration(false), 3000)
+      }
       await fetch(`/api/tasks/${taskId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -417,13 +430,34 @@ export default function TaskDashboard() {
                 </>
               )}
             </Button>
+            {/* Stats Card */}
+            <div className="p-4 mb-4 rounded-xl bg-gradient-to-br from-cyan-50 to-teal-50 border border-cyan-100 dark:from-cyan-950/20 dark:to-teal-950/20">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="size-8 rounded-full bg-cyan-100 dark:bg-cyan-900 flex items-center justify-center">
+                  <span className="text-cyan-600 text-xs font-bold">LVL</span>
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-cyan-800 dark:text-cyan-300 uppercase tracking-wider">Productivity Score</h4>
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-1.5 w-24 bg-cyan-200 dark:bg-cyan-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-cyan-500 transition-all duration-500" style={{ width: `${Math.min(100, (stats.completed / Math.max(1, stats.total)) * 100)}%` }} />
+                    </div>
+                    <span className="text-[10px] font-bold text-cyan-700">{stats.completed}/{stats.total}</span>
+                  </div>
+                </div>
+              </div>
+              <p className="text-[10px] text-cyan-700/70 dark:text-cyan-400/70 leading-relaxed font-medium">
+                {stats.completed === 0 ? "Create your first task to start leveling up!" : `You've conquered ${stats.completed} tasks! Keep the momentum going.`}
+              </p>
+            </div>
+
             <Button
               variant="outline"
-              className="w-full justify-start bg-transparent text-cyan-600 hover:text-cyan-700 dark:text-cyan-400 mb-2"
+              className="w-full justify-start bg-transparent text-cyan-600 hover:text-cyan-700 dark:text-cyan-400 mb-2 border-cyan-200"
               onClick={() => window.open("https://docs.google.com/forms/d/e/1FAIpQLSegTBIFmQCh-wR90E393Aj_qszr_TCOPxM5NA9iH29SljmN0A/viewform?usp=sharing", "_blank")}
             >
               <MessageSquare className="mr-2 size-4" />
-              Send Feedback
+              Give Feedback & Win
             </Button>
             <Button
               variant="outline"
@@ -711,10 +745,28 @@ export default function TaskDashboard() {
                   </div>
                 </div>
               ) : filteredTasks.length === 0 ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="text-center">
-                    <p className="text-muted-foreground">No tasks found. Create your first task!</p>
+                <div className="flex flex-col items-center justify-center min-h-[50vh] text-center p-8 rounded-3xl bg-gradient-to-b from-transparent to-cyan-50/30 dark:to-cyan-950/10">
+                  <div className="relative mb-8">
+                    <div className="size-24 rounded-3xl bg-gradient-to-tr from-cyan-500 to-teal-500 flex items-center justify-center shadow-xl rotate-3 animate-scale-bounce">
+                      <Plus className="size-12 text-white" />
+                    </div>
+                    <div className="absolute -top-4 -right-4 size-12 rounded-full bg-white dark:bg-gray-800 shadow-lg flex items-center justify-center animate-bounce">
+                      <span className="text-xl">🚀</span>
+                    </div>
                   </div>
+                  <h3 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-600 to-teal-600 mb-4">
+                    Ready to Win the Day?
+                  </h3>
+                  <p className="text-muted-foreground max-w-sm mx-auto mb-8 text-lg leading-relaxed">
+                    TaskFlow is better with friends. Start by creating your first task and see how it feels to crush your goals!
+                  </p>
+                  <Button 
+                    size="lg"
+                    className="h-14 px-8 text-lg font-bold bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-700 hover:to-teal-700 shadow-lg hover:shadow-cyan-500/25 transition-all active:scale-95"
+                    onClick={() => setShowCreateForm(true)}
+                  >
+                    🚀 Let's Get Started
+                  </Button>
                 </div>
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -880,9 +932,34 @@ export default function TaskDashboard() {
               </Card>
             </div>
           )}
-        </div>
-      </main>
-    </div>
-  )
+
+        {/* Celebration Overlay */}
+        {showCelebration && (
+          <div className="fixed inset-0 pointer-events-none z-[100] flex items-center justify-center overflow-hidden">
+            {[...Array(50)].map((_, i) => (
+              <div
+                key={i}
+                className="confetti"
+                style={{
+                  left: `${Math.random() * 100}%`,
+                  backgroundColor: ['#06b6d4', '#14b8a6', '#3b82f6', '#f59e0b', '#ef4444'][Math.floor(Math.random() * 5)],
+                  animationDelay: `${Math.random() * 2}s`,
+                  animationDuration: `${2 + Math.random() * 2}s`,
+                }}
+              />
+            ))}
+            <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-2xl border border-cyan-100 dark:border-cyan-900 flex flex-col items-center gap-4 animate-in zoom-in spin-in-1 duration-500">
+              <div className="size-20 rounded-full bg-cyan-100 dark:bg-cyan-900 flex items-center justify-center">
+                <PartyPopper className="size-10 text-cyan-600 dark:text-cyan-400" />
+              </div>
+              <h2 className="text-3xl font-bold text-cyan-700 dark:text-cyan-400 text-center">Task Crushed!</h2>
+              <p className="text-muted-foreground font-medium">Keep moving forward 🚀</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </main>
+  </div>
+)
 }
 
