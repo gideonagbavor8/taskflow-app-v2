@@ -517,28 +517,32 @@ export default function TaskDashboard() {
                   className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
                   rows={2}
                 />
-                <div className="flex gap-2">
-                  <select
-                    value={newTask.priority}
-                    onChange={(e) => setNewTask({ ...newTask, priority: e.target.value as TaskPriority })}
-                    className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                  >
-                    <option value="LOW">Low Priority</option>
-                    <option value="MEDIUM">Medium Priority</option>
-                    <option value="HIGH">High Priority</option>
-                  </select>
-                  <input
-                    type="datetime-local"
-                    value={newTask.dueDate}
-                    onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
-                    className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                  />
-                  <Button onClick={handleCreateTask} className="bg-gradient-to-r from-cyan-600 to-teal-600">
-                    Create
-                  </Button>
-                  <Button variant="outline" onClick={() => setShowCreateForm(false)}>
-                    Cancel
-                  </Button>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-col gap-2 sm:flex-1 sm:flex-row">
+                    <select
+                      value={newTask.priority}
+                      onChange={(e) => setNewTask({ ...newTask, priority: e.target.value as TaskPriority })}
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white sm:flex-1"
+                    >
+                      <option value="LOW">Low Priority</option>
+                      <option value="MEDIUM">Medium Priority</option>
+                      <option value="HIGH">High Priority</option>
+                    </select>
+                    <input
+                      type="datetime-local"
+                      value={newTask.dueDate}
+                      onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white sm:flex-1"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button onClick={handleCreateTask} className="flex-1 sm:flex-none bg-gradient-to-r from-cyan-600 to-teal-600 px-6">
+                      Create
+                    </Button>
+                    <Button variant="outline" onClick={() => setShowCreateForm(false)} className="flex-1 sm:flex-none px-6">
+                      Cancel
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
