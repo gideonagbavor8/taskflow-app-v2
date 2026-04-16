@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { AlertBanner, type Alert } from "@/components/AlertBanner"
-import { CheckSquare, LayoutDashboard, FolderKanban, Settings, Plus, Menu, X, Moon, Sun, Trash2, Edit2, Sparkles, Wand2, MessageSquare } from "lucide-react"
+import { CheckSquare, LayoutDashboard, FolderKanban, Settings, Plus, Menu, X, Moon, Sun, Trash2, Edit2, Sparkles, Wand2, MessageSquare, Calendar } from "lucide-react"
 import { signOut, useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 
@@ -517,25 +517,33 @@ export default function TaskDashboard() {
                   className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
                   rows={2}
                 />
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex flex-col gap-2 sm:flex-1 sm:flex-row">
-                    <select
-                      value={newTask.priority}
-                      onChange={(e) => setNewTask({ ...newTask, priority: e.target.value as TaskPriority })}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white sm:flex-1"
-                    >
-                      <option value="LOW">Low Priority</option>
-                      <option value="MEDIUM">Medium Priority</option>
-                      <option value="HIGH">High Priority</option>
-                    </select>
-                    <input
-                      type="datetime-local"
-                      value={newTask.dueDate}
-                      onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white sm:flex-1"
-                    />
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                  <div className="flex flex-col gap-3 sm:flex-1 sm:flex-row">
+                    <div className="flex flex-col gap-1.5 flex-1">
+                      <label className="text-xs font-semibold text-muted-foreground/70 ml-1">Priority</label>
+                      <select
+                        value={newTask.priority}
+                        onChange={(e) => setNewTask({ ...newTask, priority: e.target.value as TaskPriority })}
+                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                      >
+                        <option value="LOW">Low Priority</option>
+                        <option value="MEDIUM">Medium Priority</option>
+                        <option value="HIGH">High Priority</option>
+                      </select>
+                    </div>
+                    <div className="flex flex-col gap-1.5 flex-1">
+                      <label className="text-xs font-semibold text-muted-foreground/70 ml-1 flex items-center gap-1">
+                        <Calendar className="size-3" /> Due Date
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={newTask.dueDate}
+                        onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
+                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                      />
+                    </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 pb-0.5">
                     <Button onClick={handleCreateTask} className="flex-1 sm:flex-none bg-gradient-to-r from-cyan-600 to-teal-600 px-6">
                       Create
                     </Button>
