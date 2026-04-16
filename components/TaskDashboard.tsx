@@ -43,6 +43,7 @@ export default function TaskDashboard() {
   const [editTitle, setEditTitle] = useState("")
   const [editDescription, setEditDescription] = useState("")
   const [showCreateForm, setShowCreateForm] = useState(false)
+  const [showAlerts, setShowAlerts] = useState(false)
   const [newTask, setNewTask] = useState({ title: "", description: "", priority: "MEDIUM" as TaskPriority, dueDate: "" })
   const [isEnhancing, setIsEnhancing] = useState(false)
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set())
@@ -70,51 +71,68 @@ export default function TaskDashboard() {
     const dueSoonTasks = tasks.filter(t => t.status !== "DONE" && t.dueDate && new Date(t.dueDate) >= now && new Date(t.dueDate) <= tomorrow)
     const highPriorityTasks = tasks.filter(t => t.status !== "DONE" && t.priority === "HIGH")
 
-    // 1. Overdue Summary
-    if (overdueTasks.length > 0) {
+    const addedTaskIds = new Set<string>()
+
+    // 1. Overdue Tasks (Individual) - Highest Priority
+    overdueTasks.forEach(task => {
       newAlerts.push({
-        id: "summary-overdue",
+        id: `overdue-${task.id}`,
         type: "overdue",
-        title: "Critical: Overdue Tasks",
-        message: `You have ${overdueTasks.length} task${overdueTasks.length > 1 ? "s" : ""} past the deadline. Please take action immediately.`,
-        taskId: "multiple",
-        permanent: true,
+        title: task.title,
+        message: `Task "${task.title}" is past the deadline.`,
+        taskId: task.id,
         action: () => {
           setActiveTab("Tasks")
-          setAlertTypeFilter("overdue")
+          setShowAlerts(false)
+          setTimeout(() => {
+            document.getElementById(`task-${task.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          }, 100)
         }
       })
-    }
+      addedTaskIds.add(task.id)
+    })
 
-    // 2. Due Soon Summary
-    if (dueSoonTasks.length > 0 && !dismissedAlerts.has("summary-due-soon")) {
-      newAlerts.push({
-        id: "summary-due-soon",
-        type: "due-soon",
-        title: "Due Soon",
-        message: `${dueSoonTasks.length} task${dueSoonTasks.length > 1 ? "s are" : " is"} due within the next 24 hours.`,
-        taskId: "multiple",
-        action: () => {
-          setActiveTab("Tasks")
-          setAlertTypeFilter("due-soon")
-        }
-      })
-    }
+    // 2. Due Soon Tasks (Individual)
+    dueSoonTasks.forEach(task => {
+      if (!dismissedAlerts.has(`due-soon-${task.id}`) && !addedTaskIds.has(task.id)) {
+        newAlerts.push({
+          id: `due-soon-${task.id}`,
+          type: "due-soon",
+          title: task.title,
+          message: `Task "${task.title}" is due soon.`,
+          taskId: task.id,
+          action: () => {
+            setActiveTab("Tasks")
+            setShowAlerts(false)
+            setTimeout(() => {
+              document.getElementById(`task-${task.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            }, 100)
+          }
+        })
+        addedTaskIds.add(task.id)
+      }
+    })
 
-    // 3. High Priority Summary
-    if (highPriorityTasks.length > 0 && !dismissedAlerts.has("summary-high-priority")) {
-      newAlerts.push({
-        id: "summary-high-priority",
-        type: "high-priority",
-        title: "Priority Tasks",
-        message: `There ${highPriorityTasks.length > 1 ? "are" : "is"} ${highPriorityTasks.length} high priority task${highPriorityTasks.length > 1 ? "s" : ""} awaiting your attention.`,
-        taskId: "multiple",
-        action: () => {
-          setActiveTab("Tasks")
-          setAlertTypeFilter("high-priority")
-        }
-      })
-    }
+    // 3. High Priority Tasks (Individual)
+    highPriorityTasks.forEach(task => {
+      if (!dismissedAlerts.has(`high-priority-${task.id}`) && !addedTaskIds.has(task.id)) {
+        newAlerts.push({
+          id: `high-priority-${task.id}`,
+          type: "high-priority",
+          title: task.title,
+          message: `High priority task: "${task.title}"`,
+          taskId: task.id,
+          action: () => {
+            setActiveTab("Tasks")
+            setShowAlerts(false)
+            setTimeout(() => {
+              document.getElementById(`task-${task.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            }, 100)
+          }
+        })
+        addedTaskIds.add(task.id)
+      }
+    })
 
     return newAlerts
   }, [tasks, dismissedAlerts])
@@ -432,19 +450,63 @@ export default function TaskDashboard() {
               <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setSidebarOpen(true)}>
                 <Menu className="size-5" />
               </Button>
-              <h1 className="text-2xl font-bold">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold truncate">
                 {activeTab === "Tasks" ? "My Tasks" : activeTab}
               </h1>
             </div>
-            {activeTab === "Tasks" && (
-              <Button
-                className="bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-700 hover:to-teal-700"
-                onClick={() => setShowCreateForm(!showCreateForm)}
-              >
-                <Plus className="mr-2 size-4" />
-                New Task
-              </Button>
-            )}
+            <div className="flex items-center gap-3">
+              {/* Alert Indicator */}
+              {alerts.length > 0 && (
+                <div className="relative">
+                  {/* Large Screen Pill */}
+                  <button
+                    onClick={() => setShowAlerts(!showAlerts)}
+                    className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-full bg-cyan-50 border border-cyan-200 text-cyan-700 hover:bg-cyan-100 transition-colors"
+                  >
+                    <div className="size-2 rounded-full bg-cyan-500 animate-pulse" />
+                    <span className="text-xs font-bold uppercase tracking-wider">{alerts.length} System Alerts</span>
+                  </button>
+
+                  {/* Small Screen Circle */}
+                  <button
+                    onClick={() => setShowAlerts(!showAlerts)}
+                    className="relative flex lg:hidden size-10 items-center justify-center rounded-full bg-cyan-50 text-cyan-700 border border-cyan-200 hover:bg-cyan-100 transition-colors"
+                  >
+                    <span className="text-sm font-bold">{alerts.length}</span>
+                    <span className="absolute -top-0.5 -right-0.5 size-3 rounded-full bg-cyan-500 border-2 border-white animate-ping" />
+                    <span className="absolute -top-0.5 -right-0.5 size-3 rounded-full bg-cyan-500 border-2 border-white" />
+                  </button>
+
+                  {/* Floating Alerts Dropdown */}
+                  {showAlerts && (
+                    <div className="fixed inset-x-4 top-20 sm:absolute sm:inset-auto sm:right-0 sm:top-12 w-auto sm:w-96 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                      <Card className="shadow-2xl border-cyan-200 overflow-hidden">
+                        <div className="p-3 bg-cyan-50 border-b border-cyan-100 flex items-center justify-between">
+                          <span className="text-xs font-bold text-cyan-800 uppercase tracking-widest px-1">Recent Alerts</span>
+                          <Button variant="ghost" size="icon" className="size-6 text-cyan-800 hover:bg-cyan-200" onClick={() => setShowAlerts(false)}>
+                            <X className="size-4" />
+                          </Button>
+                        </div>
+                        <div className="max-h-[70vh] overflow-y-auto p-4 bg-card">
+                          <AlertBanner alerts={alerts} onDismiss={handleDismissAlert} isStatic={true} minimal={true} />
+                        </div>
+                      </Card>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeTab === "Tasks" && (
+                <Button
+                  className="bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-700 hover:to-teal-700 h-10 px-4"
+                  onClick={() => setShowCreateForm(!showCreateForm)}
+                >
+                  <Plus className="mr-2 size-4" />
+                  <span className="hidden sm:inline">New Task</span>
+                  <span className="sm:hidden">New</span>
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* Filter Tabs - Only show on Tasks tab */}
@@ -559,8 +621,6 @@ export default function TaskDashboard() {
 
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto p-6 relative">
-          {/* Global Sticky Alerts */}
-          {alerts.length > 0 && <AlertBanner alerts={alerts} onDismiss={handleDismissAlert} />}
 
           {activeTab === "Dashboard" && (
             <div className="space-y-6">
@@ -659,7 +719,7 @@ export default function TaskDashboard() {
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {filteredTasks.map((task) => (
-                    <Card key={task.id} className="group hover:shadow-lg transition-shadow duration-200">
+                    <Card key={task.id} id={`task-${task.id}`} className="group hover:shadow-lg transition-shadow duration-200">
                       <CardContent className="p-5">
                         <div className="flex items-start gap-3">
                           <Checkbox
