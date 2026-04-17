@@ -1,36 +1,95 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+<div align="center">
 
-## Getting Started
+<img src="https://img.shields.io/badge/Next.js-16.1-black?style=for-the-badge&logo=next.js&logoColor=white" alt="Next.js"/>
+<img src="https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React"/>
+<img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript"/>
+<img src="https://img.shields.io/badge/PostgreSQL-Database-336791?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL"/>
+<img src="https://img.shields.io/badge/Deployed_on-Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white" alt="Vercel"/>
 
-First, run the development server:
+<br/><br/>
+
+# ✅ TaskFlow
+
+### A full-stack, AI-powered personal task manager.
+
+[**🚀 Live Demo**](https://taskflow-app-v2.vercel.app) · [**📝 Share Feedback**](https://docs.google.com/forms/d/e/1FAIpQLSegTBIFmQCh-wR90E393Aj_qszr_TCOPxM5NA9iH29SljmN0A/viewform?usp=sharing)
+
+</div>
+
+---
+
+## 📖 About
+
+TaskFlow is a modern task management app built with **Next.js**, **React 19**, and **PostgreSQL**. It supports Google OAuth and email/password login, includes an AI assistant powered by Google Gemini, and features a clean, responsive UI that works great on any device.
+
+---
+
+## ✨ Features
+
+- 🔐 **Authentication** — Google OAuth + Email/Password sign-in
+- ✅ **Task Management** — Create, edit, prioritize, and track tasks
+- 🤖 **AI Enhancement** — Let Gemini AI improve your task descriptions instantly
+- 🔔 **Smart Alerts** — Header notifications for overdue and high-priority tasks
+- 🎉 **Celebrations** — Confetti animation when you crush a task
+- 📊 **Productivity Score** — Live sidebar tracker for your completion progress
+- 🌙 **Dark Mode** — Full light/dark theme support
+- 📱 **Fully Responsive** — Optimized for mobile, tablet, and desktop
+
+---
+
+## 🛠️ Built With
+
+- **Next.js 16** · **React 19** · **TypeScript**
+- **Tailwind CSS v4** · **Radix UI** · **Lucide Icons**
+- **Prisma ORM** · **PostgreSQL** (Supabase)
+- **NextAuth v5** · **Google Gemini AI** · **SWR**
+
+---
+
+## 🚀 Running Locally
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+# 1. Clone the repo
+git clone https://github.com/gideonagbavor8/taskflow-app-v2.git
+cd taskflow-app-v2
+
+# 2. Install dependencies
+pnpm install
+
+# 3. Set up your .env file (see below)
+
+# 4. Set up the database
+pnpm db:generate
+pnpm db:migrate
+
+# 5. Start the dev server
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Environment Variables
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```env
+DATABASE_URL=""
+DIRECT_URL=""
+NEXTAUTH_URL="http://localhost:3000"
+NEXTAUTH_SECRET=""
+GOOGLE_CLIENT_ID=""
+GOOGLE_CLIENT_SECRET=""
+GOOGLE_GEMINI_API_KEY=""
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+---
 
-## Learn More
+## 📄 License
 
-To learn more about Next.js, take a look at the following resources:
+MIT — feel free to use, fork, and build on this project.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+<div align="center">
 
-## Deploy on Vercel
+Built with ❤️ by [Gideon Agbavor](https://github.com/gideonagbavor8)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+⭐ If you found this useful, drop a star!
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+</div>
