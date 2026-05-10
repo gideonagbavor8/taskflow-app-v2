@@ -23,6 +23,7 @@ model User {
   updatedAt     DateTime @updatedAt
   tasks         Task[]
   projects      Project[]
+  workspaceMembers WorkspaceMember[]
 }
 
 model Task {
@@ -38,9 +39,12 @@ model Task {
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   projectId   String?
   project     Project?    @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  workspaceId String?
+  workspace   Workspace?  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([projectId])
+  @@index([workspaceId])
 }
 
 model Project {
@@ -53,8 +57,11 @@ model Project {
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   tasks       Task[]
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([workspaceId])
 }
 
 enum TaskStatus {
@@ -67,4 +74,36 @@ enum TaskPriority {
   LOW
   MEDIUM
   HIGH
+}
+
+model Workspace {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members   WorkspaceMember[]
+  projects  Project[]
+  tasks     Task[]
+}
+
+model WorkspaceMember {
+  id          String   @id @default(uuid())
+  workspaceId String
+  userId      String
+  role        WorkspaceRole @default(MEMBER)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+}
+
+enum WorkspaceRole {
+  ADMIN
+  MEMBER
+  GUEST
 }
