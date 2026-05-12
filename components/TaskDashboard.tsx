@@ -649,10 +649,15 @@ export default function TaskDashboard() {
             
             <div className="flex items-center gap-2">
               <NotificationBell systemAlerts={alerts} />
-              <Button variant="ghost" size="icon" className="hidden lg:flex size-10 rounded-xl" onClick={toggleDarkMode}>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className={`flex size-10 rounded-xl transition-all ${isSearchExpanded ? 'hidden sm:flex' : 'flex'}`} 
+                onClick={toggleDarkMode}
+              >
                 {darkMode ? <Sun className="size-5" /> : <Moon className="size-5" />}
               </Button>
-              <div className="hidden h-6 w-px bg-border mx-2 lg:block" />
+              <div className="hidden h-6 w-px bg-border mx-1 sm:block" />
               
               {activeTab === "Tasks" && (
                 <div className="flex items-center gap-2">
