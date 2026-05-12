@@ -12,99 +12,74 @@ export async function GET(request: Request) {
   }
 
   const now = new Date()
-  const in30m = new Date(now.getTime() + 30 * 60 * 1000)
-  const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000)
+  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000)
 
   try {
-    // 1. Find High Priority tasks due in 30 mins
-    const tasks30m = await prisma.task.findMany({
+    // Find all High Priority tasks due in the next 24 hours that haven't been alerted today
+    const upcomingTasks = await prisma.task.findMany({
       where: {
         priority: 'HIGH',
         status: { not: 'DONE' },
         dueDate: {
-          lte: in30m,
+          lte: tomorrow,
           gt: now
-        },
-        reminderSent30m: false
+        }
       },
       include: { user: true }
     })
 
-    // 2. Find High Priority tasks due in 24 hours
-    const tasks24h = await prisma.task.findMany({
-      where: {
-        priority: 'HIGH',
-        status: { not: 'DONE' },
-        dueDate: {
-          lte: in24h,
-          gt: new Date(now.getTime() + 23 * 60 * 60 * 1000) // Around 24h window
-        },
-        reminderSent24h: false
-      },
-      include: { user: true }
-    })
-
-    const results = { sent30m: 0, sent24h: 0 }
-
-    // Send 30m reminders
-    for (const task of tasks30m) {
+    // Group tasks by user
+    const userDigests: Record<string, { email: string, name: string, tasks: any[] }> = {}
+    
+    for (const task of upcomingTasks) {
       if (task.user?.email) {
-        await resend.emails.send({
-          from: 'TaskFlow <onboarding@resend.dev>', // Use verified domain in production
-          to: task.user.email,
-          subject: `🚨 URGENT: "${task.title}" is due in 30 minutes!`,
-          html: `
-            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; rounded: 12px;">
-              <h2 style="color: #0891b2;">TaskFlow Reminder</h2>
-              <p>Hi ${task.user.name || 'there'},</p>
-              <p>This is a high-priority reminder that your task <strong>"${task.title}"</strong> is due in approximately <strong>30 minutes</strong>.</p>
-              <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                <p style="margin: 0;"><strong>Task:</strong> ${task.title}</p>
-                <p style="margin: 5px 0 0 0;"><strong>Due at:</strong> ${new Date(task.dueDate!).toLocaleString()}</p>
-              </div>
-              <a href="${process.env.NEXTAUTH_URL}" style="display: inline-block; background: #0891b2; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold;">View Task</a>
-              <p style="font-size: 12px; color: #64748b; margin-top: 30px;">You are receiving this because you enabled high-priority email alerts.</p>
-            </div>
-          `
-        })
-        await prisma.task.update({
-          where: { id: task.id },
-          data: { reminderSent30m: true }
-        })
-        results.sent30m++
+        if (!userDigests[task.user.id]) {
+          userDigests[task.user.id] = {
+            email: task.user.email,
+            name: task.user.name || 'TaskFlow User',
+            tasks: []
+          }
+        }
+        userDigests[task.user.id].tasks.push(task)
       }
     }
 
-    // Send 24h reminders
-    for (const task of tasks24h) {
-      if (task.user?.email) {
-        await resend.emails.send({
-          from: 'TaskFlow <onboarding@resend.dev>',
-          to: task.user.email,
-          subject: `📅 Reminder: "${task.title}" is due tomorrow`,
-          html: `
-            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; rounded: 12px;">
-              <h2 style="color: #0891b2;">TaskFlow Daily Alert</h2>
-              <p>Hi ${task.user.name || 'there'},</p>
-              <p>This is a high-priority reminder that your task <strong>"${task.title}"</strong> is due <strong>tomorrow</strong>.</p>
-              <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                <p style="margin: 0;"><strong>Task:</strong> ${task.title}</p>
-                <p style="margin: 5px 0 0 0;"><strong>Due at:</strong> ${new Date(task.dueDate!).toLocaleString()}</p>
-              </div>
-              <a href="${process.env.NEXTAUTH_URL}" style="display: inline-block; background: #0891b2; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold;">View Task</a>
-              <p style="font-size: 12px; color: #64748b; margin-top: 30px;">Stay productive!</p>
+    let emailsSent = 0
+
+    // Send one digest email per user
+    for (const userId in userDigests) {
+      const digest = userDigests[userId]
+      
+      await resend.emails.send({
+        from: 'TaskFlow <onboarding@resend.dev>',
+        to: digest.email,
+        subject: `📅 Your Daily High-Priority Digest (${digest.tasks.length} tasks)`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
+            <h2 style="color: #0891b2; margin-bottom: 5px;">Good Morning, ${digest.name}!</h2>
+            <p style="color: #64748b; margin-top: 0;">Here are your high-priority tasks due within the next 24 hours.</p>
+            
+            <div style="margin: 25px 0;">
+              ${digest.tasks.map(task => `
+                <div style="padding: 15px; border-left: 4px solid #ef4444; background: #fef2f2; border-radius: 4px; margin-bottom: 12px;">
+                  <strong style="display: block; color: #b91c1c;">${task.title}</strong>
+                  <span style="font-size: 13px; color: #7f1d1d;">Due: ${new Date(task.dueDate!).toLocaleString()}</span>
+                </div>
+              `).join('')}
             </div>
-          `
-        })
-        await prisma.task.update({
-          where: { id: task.id },
-          data: { reminderSent24h: true }
-        })
-        results.sent24h++
-      }
+
+            <a href="${process.env.NEXTAUTH_URL}" style="display: inline-block; background: #0891b2; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; margin-top: 10px;">Open TaskFlow Dashboard</a>
+            
+            <p style="font-size: 12px; color: #94a3b8; margin-top: 40px; border-top: 1px solid #f1f5f9; padding-top: 20px;">
+              You receive this daily because you have high-priority tasks upcoming. Stay productive!
+            </p>
+          </div>
+        `
+      })
+      emailsSent++
     }
 
-    return NextResponse.json({ success: true, ...results })
+    return NextResponse.json({ success: true, userDigests: Object.keys(userDigests).length, totalTasks: upcomingTasks.length, emailsSent })
   } catch (error) {
     console.error('CRON ERROR:', error)
     return NextResponse.json({ success: false, error: 'Internal Server Error' }, { status: 500 })
