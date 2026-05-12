@@ -30,6 +30,10 @@ export const metadata: Metadata = {
     title: "TaskFlow | Smart Task Management",
     description: "Manage your tasks efficiently with AI insights and a live dashboard.",
   },
+  icons: {
+    icon: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({

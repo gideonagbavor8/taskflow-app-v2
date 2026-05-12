@@ -30,7 +30,13 @@ export default function LoginPage() {
         })
 
         if (result?.error) {
-          setError('Invalid email or password')
+          if (result.error.includes('UseGoogleLogin')) {
+            setError('This account is linked to Google. Please click the Google button below to sign in.')
+          } else if (result.error.includes('UserNotFound')) {
+            setError('No account found with this email. Please sign up first.')
+          } else {
+            setError('Invalid email or password')
+          }
         } else {
           router.push('/')
           router.refresh()
@@ -79,8 +85,8 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-cyan-50 via-white to-teal-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4">
       <Card className="w-full max-w-md shadow-xl">
         <CardHeader className="space-y-1 text-center">
-          <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-500 to-teal-600">
-            <CheckSquare className="size-6 text-white" />
+          <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-xl bg-white shadow-sm border border-border/50 overflow-hidden">
+            <img src="/logo.png" alt="TaskFlow Logo" className="size-full object-cover" />
           </div>
           <CardTitle className="text-2xl font-bold">
             {isLogin ? 'Welcome back' : 'Create an account'}

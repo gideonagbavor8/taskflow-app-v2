@@ -20,6 +20,12 @@ export async function POST(request: NextRequest) {
     })
 
     if (existingUser) {
+      if (!existingUser.password) {
+        return NextResponse.json(
+          { error: 'This account was created with Google. Please sign in with the Google button.' },
+          { status: 400 }
+        )
+      }
       return NextResponse.json(
         { error: 'User with this email already exists' },
         { status: 400 }
@@ -29,19 +35,29 @@ export async function POST(request: NextRequest) {
     // Hash password
     const hashedPassword = await bcrypt.hash(validatedData.password, 10)
 
-    // Create user
-    const user = await prisma.user.create({
-      data: {
-        email: validatedData.email,
-        password: hashedPassword,
-        name: validatedData.name || null,
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        createdAt: true,
-      },
+    // Create user and default workspace in a transaction
+    const { user } = await prisma.$transaction(async (tx) => {
+      const newUser = await tx.user.create({
+        data: {
+          email: validatedData.email,
+          password: hashedPassword,
+          name: validatedData.name || null,
+        },
+      })
+
+      const workspace = await tx.workspace.create({
+        data: {
+          name: `${validatedData.name || 'Personal'}'s Workspace`,
+          members: {
+            create: {
+              userId: newUser.id,
+              role: 'ADMIN',
+            }
+          }
+        }
+      })
+
+      return { user: newUser, workspace }
     })
 
     return NextResponse.json(

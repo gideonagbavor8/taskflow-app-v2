@@ -20,16 +20,24 @@ export async function PATCH(
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    // Check if task exists and belongs to user
+    // Check if task exists and user has access via workspace
     const existingTask = await prisma.task.findUnique({
       where: { id },
+      include: { 
+        workspace: { 
+          include: { 
+            members: true 
+          } 
+        } 
+      }
     })
 
     if (!existingTask) {
       return NextResponse.json({ error: 'Task not found' }, { status: 404 })
     }
 
-    if (existingTask.userId !== userRecord.id) {
+    const isMember = existingTask.workspace?.members.some(m => m.userId === user.id)
+    if (existingTask.userId !== user.id && !isMember) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -88,16 +96,24 @@ export async function DELETE(
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    // Check if task exists and belongs to user
+    // Check if task exists and user has access via workspace
     const existingTask = await prisma.task.findUnique({
       where: { id },
+      include: { 
+        workspace: { 
+          include: { 
+            members: true 
+          } 
+        } 
+      }
     })
 
     if (!existingTask) {
       return NextResponse.json({ error: 'Task not found' }, { status: 404 })
     }
 
-    if (existingTask.userId !== userRecord.id) {
+    const isMember = existingTask.workspace?.members.some(m => m.userId === user.id)
+    if (existingTask.userId !== user.id && !isMember) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

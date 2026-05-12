@@ -6,9 +6,14 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
-import { AlertBanner, type Alert } from "@/components/AlertBanner"
-import { CheckSquare, LayoutDashboard, FolderKanban, Settings, Plus, Menu, X, Moon, Sun, Trash2, Edit2, Sparkles, Wand2, MessageSquare, Calendar, PartyPopper } from "lucide-react"
+import { type Alert } from "@/components/AlertBanner"
+import { CheckSquare, LayoutDashboard, FolderKanban, Settings, Plus, Menu, X, Moon, Sun, Trash2, Edit2, Sparkles, Wand2, MessageSquare, Calendar, PartyPopper, LogOut, Clock, HelpCircle, Search } from "lucide-react"
 import { signOut, useSession } from "next-auth/react"
+import KanbanBoard from "./KanbanBoard"
+import WorkspaceSettings from "./WorkspaceSettings"
+import NotificationBell from "./NotificationBell"
+import TemplateSelector from "./TemplateSelector"
+import TaskAttachments from "./TaskAttachments"
 import { useRouter } from "next/navigation"
 
 type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE"
@@ -36,19 +41,26 @@ export default function TaskDashboard() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false)
   const [darkMode, setDarkMode] = useState(false)
   const [activeFilter, setActiveFilter] = useState<FilterTab>("All")
   const [activeTab, setActiveTab] = useState<ActiveTab>("Tasks")
+  const [viewMode, setViewMode] = useState<'list' | 'board'>('list')
   const [editingTask, setEditingTask] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState("")
   const [editDescription, setEditDescription] = useState("")
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [showCelebration, setShowCelebration] = useState(false)
-  const [showAlerts, setShowAlerts] = useState(false)
   const [newTask, setNewTask] = useState({ title: "", description: "", priority: "MEDIUM" as TaskPriority, dueDate: "" })
   const [isEnhancing, setIsEnhancing] = useState(false)
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set())
-  const [alertTypeFilter, setAlertTypeFilter] = useState<string | null>(null)
+  const [scrolled, setScrolled] = useState(false)
+  const [showHelpPing, setShowHelpPing] = useState(false)
+  const [showInactivityModal, setShowInactivityModal] = useState(false)
+  const [inactivityCountdown, setInactivityCountdown] = useState(60)
+  const [isMobile, setIsMobile] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false)
 
   const { data, error, isLoading, mutate } = useSWR<Task[]>("/api/tasks", fetcher)
   const tasks = Array.isArray(data) ? data : []
@@ -67,6 +79,22 @@ export default function TaskDashboard() {
       router.push("/login")
     }
   }, [status, router])
+
+  // Theme Persistence
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("theme")
+    if (savedTheme === "dark") {
+      setDarkMode(true)
+      document.documentElement.classList.add("dark")
+    } else if (savedTheme === "light") {
+      setDarkMode(false)
+      document.documentElement.classList.remove("dark")
+    } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+      // Default to system preference if no saved theme
+      setDarkMode(true)
+      document.documentElement.classList.add("dark")
+    }
+  }, [])
 
   // Generate alerts from tasks (Grouped and Derived via useMemo)
   const alerts = useMemo(() => {
@@ -92,7 +120,6 @@ export default function TaskDashboard() {
         taskId: task.id,
         action: () => {
           setActiveTab("Tasks")
-          setShowAlerts(false)
           setTimeout(() => {
             document.getElementById(`task-${task.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
           }, 100)
@@ -112,7 +139,6 @@ export default function TaskDashboard() {
           taskId: task.id,
           action: () => {
             setActiveTab("Tasks")
-            setShowAlerts(false)
             setTimeout(() => {
               document.getElementById(`task-${task.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
             }, 100)
@@ -133,7 +159,6 @@ export default function TaskDashboard() {
           taskId: task.id,
           action: () => {
             setActiveTab("Tasks")
-            setShowAlerts(false)
             setTimeout(() => {
               document.getElementById(`task-${task.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
             }, 100)
@@ -154,6 +179,69 @@ export default function TaskDashboard() {
 
     return () => clearInterval(pollInterval)
   }, [mutate])
+
+  // Hourly Help Alert
+  useEffect(() => {
+    const ONE_HOUR = 60 * 60 * 1000
+    const interval = setInterval(() => {
+      setShowHelpPing(true)
+      // Play a subtle animation for 10 seconds every hour
+      setTimeout(() => setShowHelpPing(false), 10000)
+    }, ONE_HOUR)
+
+    return () => clearInterval(interval)
+  }, [])
+
+  // Inactivity / Session Timeout Logic
+  useEffect(() => {
+    const INACTIVITY_LIMIT = 15 * 60 * 1000 // 15 minutes
+    let inactivityTimer: NodeJS.Timeout
+    let countdownInterval: NodeJS.Timeout
+
+    const handleSignOut = () => {
+      signOut({ callbackUrl: "/login" })
+    }
+
+    const resetInactivityTimer = () => {
+      setShowInactivityModal(false)
+      setInactivityCountdown(60)
+      if (inactivityTimer) clearTimeout(inactivityTimer)
+      if (countdownInterval) clearInterval(countdownInterval)
+
+      inactivityTimer = setTimeout(() => {
+        setShowInactivityModal(true)
+        // Start countdown
+        countdownInterval = setInterval(() => {
+          setInactivityCountdown((prev) => {
+            if (prev <= 1) {
+              handleSignOut()
+              return 0
+            }
+            return prev - 1
+          })
+        }, 1000)
+      }, INACTIVITY_LIMIT)
+    }
+
+    const activityEvents = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart']
+    activityEvents.forEach(event => window.addEventListener(event, resetInactivityTimer))
+
+    resetInactivityTimer()
+
+    return () => {
+      if (inactivityTimer) clearTimeout(inactivityTimer)
+      if (countdownInterval) clearInterval(countdownInterval)
+      activityEvents.forEach(event => window.removeEventListener(event, resetInactivityTimer))
+    }
+  }, [])
+
+  // Responsive Check
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 1024)
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   // Show loading spinner while Auth is initializing
   if (status === "loading") {
@@ -198,8 +286,15 @@ export default function TaskDashboard() {
   }
 
   const toggleDarkMode = () => {
-    setDarkMode(!darkMode)
-    document.documentElement.classList.toggle("dark")
+    const newMode = !darkMode
+    setDarkMode(newMode)
+    if (newMode) {
+      document.documentElement.classList.add("dark")
+      localStorage.setItem("theme", "dark")
+    } else {
+      document.documentElement.classList.remove("dark")
+      localStorage.setItem("theme", "light")
+    }
   }
 
   const handleStatusChange = async (taskId: string, newStatus: TaskStatus) => {
@@ -229,6 +324,19 @@ export default function TaskDashboard() {
       mutate()
     } catch (error) {
       console.error("Error updating task priority:", error)
+    }
+  }
+
+  const handleDueDateChange = async (taskId: string, newDate: string) => {
+    try {
+      await fetch(`/api/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dueDate: newDate || null }),
+      })
+      mutate()
+    } catch (error) {
+      console.error("Error updating task due date:", error)
     }
   }
 
@@ -330,29 +438,27 @@ export default function TaskDashboard() {
 
   const filteredTasks = Array.isArray(tasks) ? tasks.filter((task) => {
     const now = new Date()
-    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000)
-
-    if (alertTypeFilter) {
-      switch (alertTypeFilter) {
-        case "overdue":
-          return task.status !== "DONE" && task.dueDate && new Date(task.dueDate) < now
-        case "due-soon":
-          return task.status !== "DONE" && task.dueDate && new Date(task.dueDate) >= now && new Date(task.dueDate) <= tomorrow
-        case "high-priority":
-          return task.status !== "DONE" && task.priority === "HIGH"
-      }
-    }
-
-    if (activeFilter === "All") return true
-    if (activeFilter === "Completed") return task.status === "DONE"
-    if (activeFilter === "Today") {
+    
+    // Check Category Filter
+    let matchesCategory = false
+    if (activeFilter === "All") matchesCategory = true
+    else if (activeFilter === "Completed") matchesCategory = task.status === "DONE"
+    else if (activeFilter === "Today") {
       const today = new Date().toDateString()
-      return task.dueDate && new Date(task.dueDate).toDateString() === today
+      matchesCategory = !!(task.dueDate && new Date(task.dueDate).toDateString() === today)
     }
-    if (activeFilter === "Upcoming") {
-      return task.dueDate && new Date(task.dueDate) > now && task.status !== "DONE"
+    else if (activeFilter === "Upcoming") {
+      matchesCategory = !!(task.dueDate && new Date(task.dueDate) > now && task.status !== "DONE")
     }
-    return true
+
+    if (!matchesCategory) return false
+
+    // Check Search Filter
+    const searchLower = searchQuery.toLowerCase()
+    return (
+      task.title.toLowerCase().includes(searchLower) || 
+      (task.description?.toLowerCase() || "").includes(searchLower)
+    )
   }) : []
 
   const formatDate = (dateString: string | null) => {
@@ -377,18 +483,26 @@ export default function TaskDashboard() {
         className={`fixed inset-y-0 left-0 z-50 w-64 transform border-r border-border bg-card transition-transform duration-200 ease-in-out lg:relative lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"
           }`}
       >
-        <div className="flex h-full flex-col">
-          {/* Logo */}
-          <div className="flex items-center justify-between border-b border-border px-6 py-5">
-            <div className="flex items-center gap-2">
-              <div className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-500 to-teal-600">
-                <CheckSquare className="size-5 text-white" />
+        <div className="flex h-full flex-col overflow-y-auto custom-scrollbar">
+          {/* Logo & Workspace */}
+          <div className="flex flex-col border-b border-border px-6 py-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="flex size-9 items-center justify-center rounded-lg bg-white shadow-sm border border-border/50 overflow-hidden">
+                  <img src="/logo.png" alt="TaskFlow Logo" className="size-full object-cover" />
+                </div>
+                <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-600 to-teal-600">TaskFlow</span>
               </div>
-              <span className="text-lg font-semibold">TaskFlow</span>
+              <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setSidebarOpen(false)}>
+                <X className="size-5" />
+              </Button>
             </div>
-            <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setSidebarOpen(false)}>
-              <X className="size-5" />
-            </Button>
+            
+            {/* Workspace Switcher Placeholder */}
+            <div className="flex items-center gap-2 rounded-lg bg-accent/50 px-3 py-2 text-sm border border-border">
+              <div className="size-2 rounded-full bg-green-500" />
+              <span className="font-medium truncate">{session?.user?.workspaceName || "Personal Workspace"}</span>
+            </div>
           </div>
 
           {/* Navigation */}
@@ -411,61 +525,56 @@ export default function TaskDashboard() {
             ))}
           </nav>
 
-          {/* User Info & Actions */}
-          <div className="border-t border-border p-4 space-y-2">
-            <div className="px-3 py-2 text-sm">
-              <p className="font-medium">{session?.user?.name || session?.user?.email}</p>
-              <p className="text-xs text-muted-foreground">{session?.user?.email}</p>
-            </div>
-            <Button variant="outline" className="w-full justify-start bg-transparent" onClick={toggleDarkMode}>
-              {darkMode ? (
-                <>
-                  <Sun className="mr-2 size-5" />
-                  Light Mode
-                </>
-              ) : (
-                <>
-                  <Moon className="mr-2 size-5" />
-                  Dark Mode
-                </>
-              )}
-            </Button>
-            {/* Stats Card */}
-            <div className="p-4 mb-4 rounded-xl bg-gradient-to-br from-cyan-50 to-teal-50 border border-cyan-100 dark:from-cyan-950/20 dark:to-teal-950/20">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="size-8 rounded-full bg-cyan-100 dark:bg-cyan-900 flex items-center justify-center">
-                  <span className="text-cyan-600 text-xs font-bold">LVL</span>
+          {/* Footer Section */}
+          <div className="mt-auto border-t border-border p-4 space-y-4 bg-accent/5 dark:bg-accent/5">
+            <div className="p-4 rounded-2xl bg-secondary/20 dark:bg-accent/10 border border-border/40 shadow-sm">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="size-8 rounded-full bg-cyan-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                  <span className="text-white text-[10px] font-black">LVL</span>
                 </div>
-                <div>
-                  <h4 className="text-xs font-bold text-cyan-800 dark:text-cyan-300 uppercase tracking-wider">Productivity Score</h4>
-                  <div className="flex items-center gap-1.5">
-                    <div className="h-1.5 w-24 bg-cyan-200 dark:bg-cyan-800 rounded-full overflow-hidden">
-                      <div className="h-full bg-cyan-500 transition-all duration-500" style={{ width: `${Math.min(100, (stats.completed / Math.max(1, stats.total)) * 100)}%` }} />
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-[11px] font-bold text-foreground uppercase tracking-widest leading-none mb-1">Productivity</h4>
+                  <div className="flex items-center gap-2">
+                    <div className="h-1.5 flex-1 bg-border/40 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-cyan-500 to-teal-500 transition-all duration-1000" 
+                        style={{ width: `${Math.min(100, (stats.completed / Math.max(1, stats.total)) * 100)}%` }} 
+                      />
                     </div>
-                    <span className="text-[10px] font-bold text-cyan-700">{stats.completed}/{stats.total}</span>
+                    <span className="text-[10px] font-bold text-cyan-600 dark:text-cyan-400">
+                      {Math.round((stats.completed / Math.max(1, stats.total)) * 100)}%
+                    </span>
                   </div>
                 </div>
               </div>
-              <p className="text-[10px] text-cyan-700/70 dark:text-cyan-400/70 leading-relaxed font-medium">
-                {stats.completed === 0 ? "Create your first task to start leveling up!" : `You've conquered ${stats.completed} tasks! Keep the momentum going.`}
+              <p className="text-[10px] text-muted-foreground leading-relaxed font-medium">
+                {stats.completed === 0 
+                  ? "Start your first task to unlock your productivity insights." 
+                  : `You've achieved a ${Math.round((stats.completed / Math.max(1, stats.total)) * 100)}% completion rate so far.`
+                }
               </p>
             </div>
 
-            <Button
-              variant="outline"
-              className="w-full justify-start bg-transparent text-cyan-600 hover:text-cyan-700 dark:text-cyan-400 mb-2 border-cyan-200"
-              onClick={() => window.open("https://docs.google.com/forms/d/e/1FAIpQLSegTBIFmQCh-wR90E393Aj_qszr_TCOPxM5NA9iH29SljmN0A/viewform?usp=sharing", "_blank")}
-            >
-              <MessageSquare className="mr-2 size-4" />
-              Give Feedback & Win
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full justify-start bg-transparent text-red-600 hover:text-red-700 dark:text-red-400"
-              onClick={() => signOut({ callbackUrl: "/login" })}
-            >
-              Sign Out
-            </Button>
+            <div className="space-y-2">
+              <div className="flex items-center gap-3 px-2">
+                <div className="size-9 rounded-full bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center shadow-md">
+                  <span className="text-white font-bold text-sm">{(session?.user?.name || 'U').charAt(0).toUpperCase()}</span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold truncate leading-none mb-1 text-foreground">{session?.user?.name || session?.user?.email?.split('@')[0]}</p>
+                  <p className="text-[10px] text-muted-foreground truncate leading-none">Personal Space</p>
+                </div>
+              </div>
+              
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30 font-bold transition-all h-9"
+                onClick={() => signOut({ callbackUrl: "/login" })}
+              >
+                <LogOut className="mr-2 size-4" />
+                Sign Out
+              </Button>
+            </div>
           </div>
         </div>
       </aside>
@@ -475,86 +584,109 @@ export default function TaskDashboard() {
         <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Main Content */}
-      <main className="flex flex-1 flex-col overflow-hidden">
-        {/* Header */}
-        <header className="border-b border-border bg-card px-6 py-4">
+      <main 
+        className="flex-1 overflow-y-auto overflow-x-hidden relative custom-scrollbar bg-background"
+        onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 10)}
+      >
+        {/* Header - Sticky with Glassmorphism */}
+        <header className={`sticky top-0 z-30 transition-all duration-300 px-6 py-4 border-b ${
+          scrolled 
+            ? "bg-background/80 backdrop-blur-md border-border/60 shadow-sm" 
+            : "bg-transparent border-transparent"
+        }`}>
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setSidebarOpen(true)}>
-                <Menu className="size-5" />
-              </Button>
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold truncate">
-                {activeTab === "Tasks" ? "My Tasks" : activeTab}
-              </h1>
-            </div>
-            <div className="flex items-center gap-3">
-              {/* Alert Indicator */}
-              {alerts.length > 0 && (
-                <div className="relative">
-                  {/* Large Screen Pill */}
-                  <button
-                    onClick={() => setShowAlerts(!showAlerts)}
-                    className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-full bg-cyan-50 border border-cyan-200 text-cyan-700 hover:bg-cyan-100 transition-colors"
-                  >
-                    <div className="size-2 rounded-full bg-cyan-500 animate-pulse" />
-                    <span className="text-xs font-bold uppercase tracking-wider">{alerts.length} System Alerts</span>
-                  </button>
-
-                  {/* Small Screen Circle */}
-                  <button
-                    onClick={() => setShowAlerts(!showAlerts)}
-                    className="relative flex lg:hidden size-10 items-center justify-center rounded-full bg-cyan-50 text-cyan-700 border border-cyan-200 hover:bg-cyan-100 transition-colors"
-                  >
-                    <span className="text-sm font-bold">{alerts.length}</span>
-                    <span className="absolute -top-0.5 -right-0.5 size-3 rounded-full bg-cyan-500 border-2 border-white animate-ping" />
-                    <span className="absolute -top-0.5 -right-0.5 size-3 rounded-full bg-cyan-500 border-2 border-white" />
-                  </button>
-
-                  {/* Floating Alerts Dropdown */}
-                  {showAlerts && (
-                    <div className="fixed inset-x-4 top-20 sm:absolute sm:inset-auto sm:right-0 sm:top-12 w-auto sm:w-96 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                      <Card className="shadow-2xl border-cyan-200 overflow-hidden">
-                        <div className="p-3 bg-cyan-50 border-b border-cyan-100 flex items-center justify-between">
-                          <span className="text-xs font-bold text-cyan-800 uppercase tracking-widest px-1">Recent Alerts</span>
-                          <Button variant="ghost" size="icon" className="size-6 text-cyan-800 hover:bg-cyan-200" onClick={() => setShowAlerts(false)}>
-                            <X className="size-4" />
-                          </Button>
-                        </div>
-                        <div className="max-h-[70vh] overflow-y-auto p-4 bg-card">
-                          <AlertBanner alerts={alerts} onDismiss={handleDismissAlert} isStatic={true} minimal={true} />
-                        </div>
-                      </Card>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {activeTab === "Tasks" && (
-                <Button
-                  className="bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-700 hover:to-teal-700 h-10 px-4"
-                  onClick={() => setShowCreateForm(!showCreateForm)}
-                >
-                  <Plus className="mr-2 size-4" />
-                  <span className="hidden sm:inline">New Task</span>
-                  <span className="sm:hidden">New</span>
+            <div className="flex items-center justify-between w-full lg:w-auto">
+              <div className="flex items-center gap-4 min-w-0">
+                <Button variant="ghost" size="icon" className="lg:hidden shrink-0" onClick={() => setSidebarOpen(true)}>
+                  <Menu className="size-5" />
                 </Button>
+                <h1 className={`text-lg sm:text-xl md:text-2xl font-bold truncate transition-all ${isSearchExpanded ? 'hidden sm:block' : ''}`}>
+                  {activeTab === "Tasks" ? "My Tasks" : activeTab}
+                </h1>
+              </div>
+
+              {/* Search Bar - Desktop */}
+              <div className="hidden md:flex flex-1 max-w-md mx-8">
+                <div className="relative w-full group">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground group-focus-within:text-cyan-600 transition-colors" />
+                  <input 
+                    type="text" 
+                    placeholder="Search tasks..." 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-accent/30 border border-border/50 rounded-xl py-2 pl-10 pr-4 text-sm focus:bg-background focus:ring-4 focus:ring-cyan-500/10 outline-none transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Search - Mobile Toggle */}
+              <div className={`flex md:hidden items-center transition-all ${isSearchExpanded ? 'flex-1' : ''}`}>
+                {isSearchExpanded ? (
+                  <div className="relative w-full animate-in slide-in-from-right-4 duration-200">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-cyan-600" />
+                    <input 
+                      type="text" 
+                      placeholder="Search..." 
+                      autoFocus
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full bg-accent/50 border-cyan-500/30 rounded-xl py-2 pl-10 pr-10 text-sm outline-none"
+                    />
+                    <button 
+                      onClick={() => { setIsSearchExpanded(false); setSearchQuery(""); }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2"
+                    >
+                      <X className="size-4 text-muted-foreground" />
+                    </button>
+                  </div>
+                ) : (
+                  <Button variant="ghost" size="icon" onClick={() => setIsSearchExpanded(true)}>
+                    <Search className="size-5" />
+                  </Button>
+                )}
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <NotificationBell systemAlerts={alerts} />
+              <Button variant="ghost" size="icon" className="hidden lg:flex size-10 rounded-xl" onClick={toggleDarkMode}>
+                {darkMode ? <Sun className="size-5" /> : <Moon className="size-5" />}
+              </Button>
+              <div className="hidden h-6 w-px bg-border mx-2 lg:block" />
+              
+              {activeTab === "Tasks" && (
+                <div className="flex items-center gap-2">
+                  <Button 
+                    onClick={() => setIsTemplateModalOpen(true)} 
+                    variant="outline" 
+                    className="hidden sm:flex border-cyan-200 text-cyan-600 hover:bg-cyan-50"
+                  >
+                    <Sparkles className="size-4 mr-2" />
+                    Use Template
+                  </Button>
+                  <Button 
+                    onClick={() => setShowCreateForm(true)} 
+                    className="bg-cyan-600 hover:bg-cyan-700 shadow-lg shadow-cyan-500/20 px-3 sm:px-4"
+                  >
+                    <Plus className="size-4 sm:mr-2" />
+                    <span className="hidden sm:inline">New Task</span>
+                  </Button>
+                </div>
               )}
             </div>
           </div>
 
-          {/* Filter Tabs - Only show on Tasks tab */}
+          {/* Filter Tabs & View Toggles - Sub-header */}
           {activeTab === "Tasks" && (
-            <div className="mt-4 flex items-center justify-between">
-              <div className="flex gap-2 overflow-x-auto">
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
+              <div className="flex gap-2 overflow-x-auto pb-1">
                 {filterTabs.map((tab) => (
                   <button
                     key={tab}
                     onClick={() => {
                       setActiveFilter(tab)
-                      setAlertTypeFilter(null)
                     }}
-                    className={`whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeFilter === tab && !alertTypeFilter
+                    className={`whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeFilter === tab
                       ? "bg-cyan-100 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-400"
                       : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                       }`}
@@ -563,102 +695,34 @@ export default function TaskDashboard() {
                   </button>
                 ))}
               </div>
-              
-              {alertTypeFilter && (
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => setAlertTypeFilter(null)}
-                  className="text-cyan-600 font-bold"
-                >
-                  Clear Alert Filter <X className="ml-2 size-4" />
-                </Button>
-              )}
+
+              <div className="flex items-center gap-3">
+                <div className="hidden lg:flex items-center rounded-lg border border-border p-1 bg-muted/50">
+                  <button
+                    onClick={() => setViewMode('list')}
+                    className={`rounded-md px-3 py-1.5 text-xs font-bold transition-all ${viewMode === 'list' 
+                      ? 'bg-white text-cyan-700 shadow-sm dark:bg-gray-800 dark:text-cyan-400' 
+                      : 'text-muted-foreground hover:text-foreground'}`}
+                  >
+                    LIST
+                  </button>
+                  <button
+                    onClick={() => setViewMode('board')}
+                    className={`rounded-md px-3 py-1.5 text-xs font-bold transition-all ${viewMode === 'board' 
+                      ? 'bg-white text-cyan-700 shadow-sm dark:bg-gray-800 dark:text-cyan-400' 
+                      : 'text-muted-foreground hover:text-foreground'}`}
+                  >
+                    BOARD
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </header>
 
-        {/* Create Task Form */}
-        {showCreateForm && (
-          <div className="border-b border-border bg-card p-6">
-            <Card>
-              <CardContent className="p-4 space-y-4">
-                <input
-                  type="text"
-                  placeholder="Task title"
-                  value={newTask.title}
-                  onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                />
-                <div className="flex justify-end">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900/20 -mt-2"
-                    onClick={handleAIEnhance}
-                    disabled={isEnhancing || !newTask.title.trim()}
-                  >
-                    {isEnhancing ? (
-                      <div className="mr-2 size-4 animate-spin rounded-full border-2 border-current border-r-transparent" />
-                    ) : (
-                      <Sparkles className="mr-2 size-4" />
-                    )}
-                    {isEnhancing ? "Magically optimizing..." : "Magic Enhance"}
-                  </Button>
-                </div>
-                <textarea
-                  placeholder="Description (optional)"
-                  value={newTask.description}
-                  onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                  rows={2}
-                />
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                  <div className="flex flex-col gap-3 sm:flex-1 sm:flex-row">
-                    <div className="flex flex-col gap-1.5 flex-1">
-                      <label className="text-xs font-semibold text-muted-foreground/70 ml-1">Priority</label>
-                      <select
-                        value={newTask.priority}
-                        onChange={(e) => setNewTask({ ...newTask, priority: e.target.value as TaskPriority })}
-                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                      >
-                        <option value="LOW">Low Priority</option>
-                        <option value="MEDIUM">Medium Priority</option>
-                        <option value="HIGH">High Priority</option>
-                      </select>
-                    </div>
-                    <div className="flex flex-col gap-1.5 flex-1">
-                      <label className="text-xs font-semibold text-muted-foreground/70 ml-1 flex items-center gap-1">
-                        <Calendar className="size-3" /> Due Date
-                      </label>
-                      <input
-                        type="datetime-local"
-                        value={newTask.dueDate}
-                        onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
-                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex gap-2 pb-0.5">
-                    <Button onClick={handleCreateTask} className="flex-1 sm:flex-none bg-gradient-to-r from-cyan-600 to-teal-600 px-6">
-                      Create
-                    </Button>
-                    <Button variant="outline" onClick={() => setShowCreateForm(false)} className="flex-1 sm:flex-none px-6">
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-6 relative">
-
+        <div className="p-6">
           {activeTab === "Dashboard" && (
             <div className="space-y-6">
-
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {[
                   { label: "Total Tasks", value: Array.isArray(tasks) ? tasks.length : 0, color: "text-cyan-600" },
@@ -730,46 +794,89 @@ export default function TaskDashboard() {
           )}
 
           {activeTab === "Tasks" && (
-            <>
-              {isLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="text-center">
-                    <div className="mb-4 inline-block size-8 animate-spin rounded-full border-4 border-solid border-cyan-600 border-r-transparent"></div>
-                    <p className="text-muted-foreground">Loading tasks...</p>
-                  </div>
+            <div className="space-y-6">
+              {showCreateForm && (
+                <div className="mb-8 animate-in slide-in-from-top-4 duration-300 max-w-4xl mx-auto w-full">
+                  <Card className="border-cyan-500/20 dark:border-cyan-900/50 shadow-2xl overflow-hidden bg-card/50 backdrop-blur-sm">
+                    <CardContent className="p-6 space-y-4">
+                      <input
+                        type="text"
+                        placeholder="What needs to be done?"
+                        value={newTask.title}
+                        onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+                        className="w-full text-lg font-bold bg-transparent border-none focus:ring-0 placeholder:text-muted-foreground/30"
+                        autoFocus
+                      />
+                      <div className="flex justify-end">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-purple-600 hover:text-purple-700"
+                          onClick={handleAIEnhance}
+                          disabled={isEnhancing || !newTask.title.trim()}
+                        >
+                          {isEnhancing ? <Clock className="mr-2 size-4 animate-spin" /> : <Sparkles className="mr-2 size-4" />}
+                          {isEnhancing ? "Optimizing..." : "Magic Enhance"}
+                        </Button>
+                      </div>
+                      <textarea
+                        placeholder="Add a description..."
+                        value={newTask.description}
+                        onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
+                        className="w-full bg-transparent border-none focus:ring-0 text-sm placeholder:text-muted-foreground/20 resize-none"
+                        rows={2}
+                      />
+                      <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-border/50">
+                        <div className="flex flex-wrap items-center gap-4">
+                          <div className="flex flex-col gap-1">
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Priority</label>
+                            <select
+                              value={newTask.priority}
+                              onChange={(e) => setNewTask({ ...newTask, priority: e.target.value as TaskPriority })}
+                              className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs focus:ring-2 focus:ring-cyan-500/20 outline-none"
+                            >
+                              <option value="LOW">Low</option>
+                              <option value="MEDIUM">Medium</option>
+                              <option value="HIGH">High</option>
+                            </select>
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Due Date</label>
+                            <input
+                              type="date"
+                              value={newTask.dueDate}
+                              onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
+                              className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs focus:ring-2 focus:ring-cyan-500/20 outline-none"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button variant="ghost" onClick={() => setShowCreateForm(false)}>Cancel</Button>
+                          <Button onClick={handleCreateTask} className="bg-cyan-600 hover:bg-cyan-700 shadow-lg">Create Task</Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
-              ) : error ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="text-center">
-                    <p className="text-red-600 dark:text-red-400">Error loading tasks. Please try again.</p>
-                  </div>
+              )}
+
+              {isLoading ? (
+                <div className="flex h-64 items-center justify-center">
+                  <div className="size-8 animate-spin rounded-full border-4 border-cyan-600 border-r-transparent" />
                 </div>
               ) : filteredTasks.length === 0 ? (
-                <div className="flex flex-col items-center justify-center min-h-[50vh] text-center p-8 rounded-3xl bg-gradient-to-b from-transparent to-cyan-50/30 dark:to-cyan-950/10">
-                  <div className="relative mb-8">
-                    <div className="size-24 rounded-3xl bg-gradient-to-tr from-cyan-500 to-teal-500 flex items-center justify-center shadow-xl rotate-3 animate-scale-bounce">
-                      <Plus className="size-12 text-white" />
-                    </div>
-                    <div className="absolute -top-4 -right-4 size-12 rounded-full bg-white dark:bg-gray-800 shadow-lg flex items-center justify-center animate-bounce">
-                      <span className="text-xl">🚀</span>
-                    </div>
+                <div className="flex flex-col items-center justify-center min-h-[40vh] text-center p-8 rounded-3xl bg-accent/5">
+                  <div className="size-16 rounded-full bg-cyan-100 dark:bg-cyan-900/50 flex items-center justify-center mb-4">
+                    <CheckSquare className="size-8 text-cyan-600" />
                   </div>
-                  <h3 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-600 to-teal-600 mb-4">
-                    Ready to Win the Day?
-                  </h3>
-                  <p className="text-muted-foreground max-w-sm mx-auto mb-8 text-lg leading-relaxed">
-                    TaskFlow is better with friends. Start by creating your first task and see how it feels to crush your goals!
-                  </p>
-                  <Button 
-                    size="lg"
-                    className="h-14 px-8 text-lg font-bold bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-700 hover:to-teal-700 shadow-lg hover:shadow-cyan-500/25 transition-all active:scale-95"
-                    onClick={() => setShowCreateForm(true)}
-                  >
-                    🚀 Let's Get Started
-                  </Button>
+                  <h3 className="text-xl font-bold">No tasks found</h3>
+                  <p className="text-muted-foreground max-w-sm mb-6">Looks like you're all caught up! Create a new task to get started.</p>
+                  <Button onClick={() => setShowCreateForm(true)}>Create Task</Button>
                 </div>
+              ) : (viewMode === 'board' && !isMobile) ? (
+                <KanbanBoard tasks={filteredTasks} onStatusChange={handleStatusChange} onTaskClick={startEdit} onDelete={handleDelete} formatDate={formatDate} />
               ) : (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 pb-20">
                   {filteredTasks.map((task) => (
                     <Card key={task.id} id={`task-${task.id}`} className="group hover:shadow-lg transition-shadow duration-200">
                       <CardContent className="p-5">
@@ -781,7 +888,7 @@ export default function TaskDashboard() {
                             }}
                             className="mt-1"
                           />
-                          <div className="flex-1 space-y-3">
+                          <div className="flex-1 space-y-3 min-w-0">
                             {editingTask === task.id ? (
                               <div className="space-y-2">
                                 <input
@@ -797,6 +904,9 @@ export default function TaskDashboard() {
                                   className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm focus:border-cyan-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
                                   rows={2}
                                 />
+                                <div className="py-2 border-y border-border/40 my-2">
+                                  <TaskAttachments taskId={task.id} />
+                                </div>
                                 <div className="flex gap-2">
                                   <Button size="sm" onClick={() => saveEdit(task.id)} className="bg-cyan-600">
                                     Save
@@ -810,12 +920,12 @@ export default function TaskDashboard() {
                               <>
                                 <div className="flex items-start justify-between gap-2">
                                   <h3
-                                    className={`font-semibold leading-snug flex-1 ${task.status === "DONE" ? "text-muted-foreground line-through" : ""
+                                    className={`font-semibold leading-snug flex-1 break-words min-w-0 ${task.status === "DONE" ? "text-muted-foreground line-through" : ""
                                       }`}
                                   >
                                     {task.title}
                                   </h3>
-                                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <div className="flex gap-1 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity opacity-100 bg-background/50 backdrop-blur-sm rounded-lg p-0.5 border border-border/20 lg:border-none lg:bg-transparent lg:backdrop-blur-none">
                                     <Button
                                       size="icon"
                                       variant="ghost"
@@ -834,7 +944,7 @@ export default function TaskDashboard() {
                                     </Button>
                                   </div>
                                 </div>
-                                <p className="line-clamp-2 text-sm text-muted-foreground">{task.description}</p>
+                                <p className="line-clamp-2 text-sm text-muted-foreground break-words">{task.description}</p>
                                 <div className="flex items-center justify-between gap-2 flex-wrap">
                                   <div className="flex gap-2 flex-wrap">
                                     <Badge variant="secondary" className={getStatusColor(task.status)}>
@@ -848,25 +958,40 @@ export default function TaskDashboard() {
                                     <span className="text-xs text-muted-foreground">{formatDate(task.dueDate)}</span>
                                   )}
                                 </div>
-                                <div className="flex gap-2">
-                                  <select
-                                    value={task.status}
-                                    onChange={(e) => handleStatusChange(task.id, e.target.value as TaskStatus)}
-                                    className="flex-1 rounded border border-gray-300 bg-white px-2 py-1 text-xs focus:border-cyan-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                                  >
-                                    <option value="TODO">Todo</option>
-                                    <option value="IN_PROGRESS">In Progress</option>
-                                    <option value="DONE">Done</option>
-                                  </select>
-                                  <select
-                                    value={task.priority}
-                                    onChange={(e) => handlePriorityChange(task.id, e.target.value as TaskPriority)}
-                                    className="flex-1 rounded border border-gray-300 bg-white px-2 py-1 text-xs focus:border-cyan-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                                  >
-                                    <option value="LOW">Low</option>
-                                    <option value="MEDIUM">Medium</option>
-                                    <option value="HIGH">High</option>
-                                  </select>
+                                <div className="flex flex-col gap-2 pt-2 border-t border-border/40">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-bold text-muted-foreground uppercase w-12 shrink-0">Status</span>
+                                    <select
+                                      value={task.status}
+                                      onChange={(e) => handleStatusChange(task.id, e.target.value as TaskStatus)}
+                                      className="flex-1 min-w-0 rounded-lg border border-gray-300 bg-white px-2 py-1 text-[11px] focus:border-cyan-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white transition-colors"
+                                    >
+                                      <option value="TODO">Todo</option>
+                                      <option value="IN_PROGRESS">In Progress</option>
+                                      <option value="DONE">Done</option>
+                                    </select>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-bold text-muted-foreground uppercase w-12 shrink-0">Priority</span>
+                                    <select
+                                      value={task.priority}
+                                      onChange={(e) => handlePriorityChange(task.id, e.target.value as TaskPriority)}
+                                      className="flex-1 min-w-0 rounded-lg border border-gray-300 bg-white px-2 py-1 text-[11px] focus:border-cyan-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white transition-colors"
+                                    >
+                                      <option value="LOW">Low</option>
+                                      <option value="MEDIUM">Medium</option>
+                                      <option value="HIGH">High</option>
+                                    </select>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-bold text-muted-foreground uppercase w-12 shrink-0">Due Date</span>
+                                    <input
+                                      type="date"
+                                      value={task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : ""}
+                                      onChange={(e) => handleDueDateChange(task.id, e.target.value)}
+                                      className="flex-1 min-w-0 rounded-lg border border-gray-300 bg-white px-2 py-1 text-[11px] focus:border-cyan-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white transition-colors"
+                                    />
+                                  </div>
                                 </div>
                               </>
                             )}
@@ -875,8 +1000,6 @@ export default function TaskDashboard() {
                       </CardContent>
                     </Card>
                   ))}
-
-                  {/* Add Task Card */}
                   <Card
                     className="border-2 border-dashed hover:border-cyan-500 hover:bg-cyan-50/50 dark:hover:bg-cyan-950/20 transition-colors cursor-pointer"
                     onClick={() => setShowCreateForm(true)}
@@ -892,74 +1015,132 @@ export default function TaskDashboard() {
                   </Card>
                 </div>
               )}
-            </>
-          )}
 
-          {activeTab === "Projects" && (
-            <div className="flex flex-col items-center justify-center h-64 text-center">
-              <FolderKanban className="size-16 text-muted-foreground/30 mb-4" />
-              <h2 className="text-xl font-semibold mb-2">Projects View coming soon!</h2>
-              <p className="text-muted-foreground max-w-md">We are working on a feature to group your tasks into dedicated projects for better organization.</p>
-            </div>
-          )}
-
-          {activeTab === "Settings" && (
-            <div className="max-w-2xl space-y-6">
-              <Card>
-                <CardContent className="p-6 space-y-6">
-                  <div>
-                    <h2 className="text-lg font-semibold mb-1">Account Profile</h2>
-                    <p className="text-sm text-muted-foreground mb-4">Update your personal information and profile settings.</p>
-                    <div className="space-y-4">
-                      <div className="grid gap-2">
-                        <label className="text-sm font-medium">Logged in as</label>
-                        <div className="p-3 bg-accent rounded-lg text-sm">
-                          {session?.user?.name || session?.user?.email}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="border-t pt-6">
-                    <h2 className="text-lg font-semibold mb-1">Appearance</h2>
-                    <p className="text-sm text-muted-foreground mb-4">Customize how TaskFlow looks for you.</p>
-                    <Button variant="outline" onClick={toggleDarkMode}>
-                      {darkMode ? <Sun className="mr-2 size-5" /> : <Moon className="mr-2 size-5" />}
-                      Switch to {darkMode ? "Light" : "Dark"} Mode
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-        {/* Celebration Overlay */}
-        {showCelebration && (
-          <div className="fixed inset-0 pointer-events-none z-[100] flex items-center justify-center overflow-hidden">
-            {[...Array(50)].map((_, i) => (
-              <div
-                key={i}
-                className="confetti"
-                style={{
-                  left: `${Math.random() * 100}%`,
-                  backgroundColor: ['#06b6d4', '#14b8a6', '#3b82f6', '#f59e0b', '#ef4444'][Math.floor(Math.random() * 5)],
-                  animationDelay: `${Math.random() * 2}s`,
-                  animationDuration: `${2 + Math.random() * 2}s`,
-                }}
-              />
-            ))}
-            <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-2xl border border-cyan-100 dark:border-cyan-900 flex flex-col items-center gap-4 animate-in zoom-in spin-in-1 duration-500">
-              <div className="size-20 rounded-full bg-cyan-100 dark:bg-cyan-900 flex items-center justify-center">
-                <PartyPopper className="size-10 text-cyan-600 dark:text-cyan-400" />
+              {/* End of List Indicator */}
+              <div className="mt-12 mb-8 flex flex-col items-center justify-center text-center space-y-2 opacity-60 hover:opacity-100 transition-opacity">
+                <div className="h-px w-24 bg-gradient-to-r from-transparent via-border to-transparent mb-4" />
+                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <PartyPopper className="size-4 text-cyan-600" />
+                  <span>All caught up!</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  You've completed <span className="font-bold text-foreground">{stats.completed}</span> {stats.completed === 1 ? 'task' : 'tasks'} today.
+                </p>
+                <a 
+                  href="https://docs.google.com/forms/d/e/1FAIpQLSegTBIFmQCh-wR90E393Aj_qszr_TCOPxM5NA9iH29SljmN0A/viewform?usp=dialog" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-[10px] font-bold uppercase tracking-widest text-cyan-600 hover:text-cyan-700 hover:underline pt-2"
+                >
+                  Need help?
+                </a>
               </div>
-              <h2 className="text-3xl font-bold text-cyan-700 dark:text-cyan-400 text-center">Task Crushed!</h2>
-              <p className="text-muted-foreground font-medium">Keep moving forward 🚀</p>
+            </div>
+          )}
+          {activeTab === "Projects" && (
+            <div className="flex flex-col items-center justify-center h-96 text-center">
+              <FolderKanban className="size-16 text-muted-foreground/20 mb-4" />
+              <h2 className="text-2xl font-bold">Projects</h2>
+              <p className="text-muted-foreground">Manage your workspace projects here. Coming soon!</p>
+            </div>
+          )}
+
+          {activeTab === "Settings" && <WorkspaceSettings />}
+        </div>
+
+        {/* Global Overlays */}
+        {showCelebration && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none">
+            <div className="bg-background/90 backdrop-blur-xl rounded-3xl p-8 border border-cyan-500/20 shadow-2xl flex flex-col items-center gap-4 animate-in zoom-in duration-500">
+              <div className="size-20 rounded-full bg-cyan-500/10 flex items-center justify-center">
+                <PartyPopper className="size-10 text-cyan-600" />
+              </div>
+              <h2 className="text-3xl font-black text-cyan-600">MISSION COMPLETE!</h2>
+              <p className="font-bold text-muted-foreground">Keep moving forward 🚀</p>
             </div>
           </div>
         )}
-      </div>
-    </main>
-  </div>
-)
+
+        {isTemplateModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-card w-full max-w-4xl rounded-3xl border border-border shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="p-6 border-b flex justify-between items-center bg-muted/20">
+                <div className="flex items-center gap-3">
+                  <Sparkles className="size-6 text-cyan-600" />
+                  <h2 className="text-xl font-bold">Select Template</h2>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setIsTemplateModalOpen(false)}><X className="size-5" /></Button>
+              </div>
+              <div className="p-6 overflow-y-auto">
+                <TemplateSelector onSelect={async (templateId) => {
+                  const res = await fetch('/api/templates/apply', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ templateId }) })
+                  if (res.ok) { setIsTemplateModalOpen(false); mutate(); }
+                }} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Pulsing Help Button */}
+        <div className="fixed bottom-6 right-6 z-[60] flex flex-col items-end gap-3">
+          {showHelpPing && (
+            <div className="bg-cyan-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-lg animate-bounce uppercase tracking-tighter">
+              Need assistance?
+            </div>
+          )}
+          <a
+            href="https://docs.google.com/forms/d/e/1FAIpQLSegTBIFmQCh-wR90E393Aj_qszr_TCOPxM5NA9iH29SljmN0A/viewform?usp=dialog"
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`group relative flex size-12 items-center justify-center rounded-full bg-cyan-600 text-white shadow-2xl transition-all hover:scale-110 active:scale-95 ${
+              showHelpPing ? 'ring-4 ring-cyan-500/30' : ''
+            }`}
+          >
+            {/* Pulsing Background Rings */}
+            <span className="absolute inset-0 rounded-full bg-cyan-600 animate-ping opacity-20 pointer-events-none" />
+            <span className="absolute -inset-2 rounded-full bg-cyan-600 animate-pulse opacity-10 pointer-events-none" />
+            
+            <HelpCircle className="size-6 transition-transform group-hover:rotate-12" />
+          </a>
+        </div>
+
+        {/* Inactivity Warning Modal */}
+        {showInactivityModal && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-background/95 backdrop-blur-xl animate-in fade-in duration-300">
+            <Card className="w-full max-w-md border-cyan-500/20 shadow-2xl overflow-hidden text-center p-8 space-y-6">
+              <div className="mx-auto size-20 rounded-full bg-cyan-500/10 flex items-center justify-center">
+                <Clock className="size-10 text-cyan-600 animate-pulse" />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-2xl font-bold">Are you still there?</h2>
+                <p className="text-muted-foreground">For your security, you will be signed out due to inactivity in:</p>
+              </div>
+              <div className="text-5xl font-black text-cyan-600 tabular-nums">
+                {inactivityCountdown}s
+              </div>
+              <div className="flex flex-col gap-3 pt-4">
+                <Button 
+                  onClick={() => {
+                    // This will trigger the activity listeners and reset the timer
+                    window.dispatchEvent(new Event('mousedown'));
+                  }}
+                  className="bg-cyan-600 hover:bg-cyan-700 h-12 text-lg shadow-lg shadow-cyan-500/20"
+                >
+                  I'm Still Working
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  onClick={() => signOut({ callbackUrl: "/login" })}
+                  className="text-muted-foreground"
+                >
+                  Sign Out Now
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
+      </main>
+    </div>
+  )
 }
 

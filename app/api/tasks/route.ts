@@ -17,7 +17,11 @@ export async function GET() {
     }
 
     const tasks = await prisma.task.findMany({
-      where: { userId: userRecord.id },
+      where: { 
+        workspaceId: user.workspaceId || undefined,
+        // Fallback for transition: if no workspaceId, filter by userId
+        userId: !user.workspaceId ? user.id : undefined,
+      },
       include: {
         project: {
           select: {
@@ -68,8 +72,9 @@ export async function POST(request: NextRequest) {
         dueDate: validatedData.dueDate && validatedData.dueDate.trim() !== '' 
           ? new Date(validatedData.dueDate) 
           : null,
-        userId: userRecord.id,
+        userId: user.id,
         projectId: validatedData.projectId || null,
+        workspaceId: user.workspaceId || null,
       },
       include: {
         project: {

@@ -22,14 +22,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             where: { email: credentials.email as string },
           })
 
-          if (!user || !user.password) {
-            return null
+          if (!user) {
+            throw new Error('UserNotFound')
+          }
+
+          if (!user.password) {
+            throw new Error('UseGoogleLogin')
           }
 
           const isValid = await bcrypt.compare(credentials.password as string, user.password)
 
           if (!isValid) {
-            return null
+            throw new Error('InvalidPassword')
           }
 
           return {
@@ -59,7 +63,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             })
 
             if (!existingUser) {
-              await prisma.user.create({
+              const newUser = await prisma.user.create({
                 data: {
                   email: user.email,
                   name: user.name || null,
@@ -67,6 +71,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                   emailVerified: new Date(),
                   lastLogin: new Date(),
                 },
+              })
+              // Create default workspace for new user
+              await prisma.workspace.create({
+                data: {
+                  name: `${user.name || 'Personal'}'s Workspace`,
+                  members: {
+                    create: {
+                      userId: newUser.id,
+                      role: 'ADMIN',
+                    }
+                  }
+                }
               })
             } else {
               await prisma.user.update({
@@ -100,9 +116,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (session.user?.email) {
         const user = await prisma.user.findUnique({
           where: { email: session.user.email },
+          include: {
+            workspaceMembers: {
+              include: { workspace: true },
+              take: 1, // Get the first workspace as default
+            }
+          }
         })
         if (user) {
           session.user.id = user.id
+          session.user.workspaceId = user.workspaceMembers[0]?.workspaceId || null
+          session.user.workspaceName = user.workspaceMembers[0]?.workspace?.name || null
         }
       }
       return session
