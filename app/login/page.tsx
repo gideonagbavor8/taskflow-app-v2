@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { CheckSquare, Mail, Lock, Loader2 } from 'lucide-react'
+import { TypeAnimation } from 'react-type-animation'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -89,7 +90,30 @@ export default function LoginPage() {
             <img src="/logo.png" alt="TaskFlow Logo" className="size-full object-cover" />
           </div>
           <CardTitle className="text-2xl font-bold">
-            {isLogin ? 'Welcome back' : 'Create an account'}
+            {isLogin ? (
+              <TypeAnimation
+                sequence={[
+                  'Manage your tasks.',
+                  1800,
+                  'Stay organized.',
+                  1800,
+                  'Get things done.',
+                  1800,
+                  'Boost productivity.',
+                  1800,
+                  'Never miss a deadline.',
+                  1800,
+                ]}
+                wrapper="span"
+                speed={55}
+                deletionSpeed={70}
+                repeat={Infinity}
+                cursor={true}
+                className="text-cyan-600 dark:text-cyan-400"
+              />
+            ) : (
+              'Create an account'
+            )}
           </CardTitle>
           <CardDescription>
             {isLogin
